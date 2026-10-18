@@ -111,3 +111,4 @@ use `aarch64-linux-gnu-`; set `BUSYBOX` to a static aarch64 busybox). See
 | `config/tapas.config` | changes on top of it |
 | `initramfs/init` | bring-up init (busybox) |
 | `scripts/build.sh` | builds everything |
+| `scripts/mkbootimg.py` | AOSP mkbootimg, as shipped by Mu-Silicium (Ubuntu's package lacks its `gki` module) |

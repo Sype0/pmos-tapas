@@ -4,7 +4,7 @@
 #   scripts/build.sh [out-dir]
 #
 # Needs: git, make, gcc (aarch64 native, or aarch64-linux-gnu- cross),
-# bc, bison, flex, libssl-dev, cpio, gzip, mkbootimg and a static aarch64
+# bc, bison, flex, libssl-dev, cpio, gzip, python3 and a static aarch64
 # busybox (BUSYBOX=/path, default: the one in PATH).
 set -eu
 
@@ -68,7 +68,7 @@ install -m 755 "$ROOT/initramfs/init" "$IR/init"
 # format the tapas bootloader is known to take (Mu-Silicium boots this way)
 for v in $VARIANTS; do
 	cat "$KOUT/arch/arm64/boot/Image.gz" "$KOUT/$DTS_DIR/sm6225-xiaomi-$v.dtb" >"$WORK/Image.gz-dtb-$v"
-	mkbootimg \
+	python3 "$ROOT/scripts/mkbootimg.py" \
 		--header_version 1 \
 		--kernel "$WORK/Image.gz-dtb-$v" \
 		--ramdisk "$WORK/initramfs.cpio.gz" \
