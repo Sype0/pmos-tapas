@@ -48,25 +48,44 @@ the format Mu-Silicium boots tapas with. The kernel command line is built in
 Needs an unlocked bootloader and another device with `fastboot` (a PC, or a
 second phone with Termux and `android-tools`).
 
-`fastboot boot` only loads the image into RAM: nothing on the phone is
-changed, and a reboot goes back to Android.
+`fastboot boot` is not available on tapas, so the image goes to the boot
+partition of the **inactive** A/B slot. Android stays untouched on the
+active slot; only `boot` of the other slot is written.
 
 1. Turn the phone off, hold Volume Down + Power to enter fastboot, connect
    USB.
-2. `fastboot boot boot-tapas.img`
-3. The screen should fill with kernel messages, then lines starting with
+2. `fastboot getvar current-slot`. The commands below assume it says `b`;
+   if it says `a`, swap `a` and `b` in them. Never flash the active slot.
+3. Flash and boot the other slot:
+
+   ```
+   fastboot flash boot_a boot-tapas.img
+   fastboot set_active a
+   fastboot reboot
+   ```
+
+4. The screen should fill with kernel messages, then lines starting with
    `tapas:` from the init: USB state and the block devices found.
-4. The phone shows up as a USB serial port (`/dev/ttyACM0` on Linux, a COM
+5. The phone shows up as a USB serial port (`/dev/ttyACM0` on Linux, a COM
    port on Windows, or use a USB serial terminal app on Android). Open it at
    115200 for a root shell.
-5. To leave: hold Power until it restarts (Volume Down + Power for fastboot).
+
+Back to Android: hold Volume Down + Power until fastboot shows up, then
+
+```
+fastboot set_active b
+fastboot reboot
+```
+
+The bootloader that provides fastboot is not changed, so this works however
+the Linux boot ends.
 
 What to report back:
 
 - how far the screen gets (a photo of the last lines), or if it stays on the
   bootloader logo / goes back to fastboot;
-- if it restarts by itself: boot `boot-tapas.img` again right away, the init
-  prints the end of the previous log as `prev:` lines and keeps it in
+- if it restarts by itself: let it boot slot `a` again, the init prints the
+  end of the previous log as `prev:` lines and keeps it in
   `/tmp/last_kmsg`;
 - if `boot-tapas.img` does not get far, the same with `boot-tapas-safe.img`.
 
