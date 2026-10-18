@@ -1,0 +1,61 @@
+name: Build boot images
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - README.md
+
+jobs:
+  build:
+    # Native arm64: no cross compiler, and the static busybox comes from apt
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libssl-dev libelf-dev cpio file \
+            mkbootimg busybox-static
+
+      - name: Build
+        run: scripts/build.sh dist
+
+      - name: Summary
+        run: |
+          {
+            echo "### Kernel $(cat dist/kernel.release)"
+            echo '```'
+            ls -l dist/boot-*.img
+            grep -E '^CONFIG_(CMDLINE|LOCALVERSION)=' dist/kernel.config
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tapas-boot-images
+          path: dist
+
+      - name: Publish release
+        run: |
+          cat > notes.md <<NOTES
+          Bring-up boot images for the Redmi Note 12 4G (tapas), mainline $(cat dist/kernel.release), built from ${GITHUB_SHA::7}.
+
+          **Not tested on a device yet.** Boot them with \`fastboot boot\` (nothing is written to the phone), see the README.
+
+          - \`boot-tapas.img\`: framebuffer, USB serial, keys, UFS and SD card
+          - \`boot-tapas-safe.img\`: framebuffer, USB serial and keys only
+          NOTES
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest --prerelease --target "${GITHUB_SHA}" \
+            --title "tapas bring-up ($(date -u +%Y-%m-%d))" --notes-file notes.md \
+            dist/boot-*.img dist/*.dtb dist/kernel.config dist/SHA256SUMS

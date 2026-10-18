@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Bring-up variant of sm6225-xiaomi-tapas: only the framebuffer, USB and
+ * the keys. Use it when the full image does not reach the debug shell, to
+ * tell a storage problem from a basic boot problem.
+ */
+#include "sm6225-xiaomi-tapas.dts"
+
+/ {
+	model = "Xiaomi Redmi Note 12 4G (safe)";
+};
+
+&ufs_mem_hc {
+	status = "disabled";
+};
+
+&ufs_mem_phy {
+	status = "disabled";
+};
+
+&sdhc_2 {
+	status = "disabled";
+};

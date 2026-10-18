@@ -1,0 +1,174 @@
+#!/bin/busybox sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Bring-up init for the Redmi Note 12 4G (tapas).
+#
+# Everything it says goes to the kernel log, which the framebuffer console
+# shows on the screen. It gives a root shell on USB serial (CDC ACM) and,
+# when a filesystem labelled "tapas_root" with an init exists, switches to
+# it after a countdown that the serial shell can stop.
+#
+# The USB bring-up sequence is the one the Redmi 10C (same SoC) port uses:
+# https://github.com/Damir00109/Redmi10c (tools/pivot-init)
+
+/bin/busybox mkdir -p /proc /sys /dev /tmp /etc /newroot /sbin /usr/bin /usr/sbin
+/bin/busybox --install -s
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s
+mkdir -p /dev/pts /sys/kernel/config /sys/fs/pstore
+mount -t devpts devpts /dev/pts
+mount -t configfs configfs /sys/kernel/config
+mount -t pstore pstore /sys/fs/pstore 2>/dev/null
+mount -t tmpfs tmpfs /tmp
+
+log() {
+	echo "tapas: $*" >/dev/kmsg
+}
+
+log "bring-up init, kernel $(uname -r)"
+
+# A log left by the boot before this one (kept in RAM over a warm reset)
+if ls /sys/fs/pstore/console-ramoops* >/dev/null 2>&1; then
+	cat /sys/fs/pstore/console-ramoops* >/tmp/last_kmsg
+	log "previous boot left a log (/tmp/last_kmsg), its end:"
+	tail -n 30 /tmp/last_kmsg | while IFS= read -r line; do
+		echo "prev: $line" >/dev/kmsg
+	done
+	log "end of previous log"
+fi
+
+rmw32() {
+	cur=$(devmem "$1" 32) || return 1
+	devmem "$1" 32 "$(printf '0x%08x' $(( (cur & ~$2) | $3 )))"
+}
+
+# The USB clocks and PHY are not described in the device tree yet, so
+# they are brought up by hand: USB30 GDSC and clocks in GCC, then the
+# QSCRATCH and SNPS femto PHY settings.
+usb_phy_init() {
+	rmw32 0x0141a004 0x1 0x0
+	for _ in 1 2 3 4 5 6 7 8 9 10; do
+		[ $(( ($(devmem 0x0141a004 32) >> 31) & 1 )) -eq 1 ] && break
+		sleep 1
+	done
+	devmem 0x0141a014 32 0x1
+	devmem 0x0141a010 32 0x1
+	devmem 0x0141a018 32 0x1
+	devmem 0x0141d000 32 0x0
+	devmem 0x0141d008 32 0x3
+	rmw32 0x04ef8808 0x0 0x100
+	sleep 0.3
+	rmw32 0x04ef8808 0x0 0x9
+	sleep 0.3
+	rmw32 0x04ef8808 0x100 0x0
+	rmw32 0x04ef8810 0x0 0x10100000
+	rmw32 0x04ef8830 0x0 0x01000000
+	devmem 0x0161306c 32 0x61
+	devmem 0x01613070 32 0x08
+	devmem 0x01613074 32 0x2d
+	rmw32 0x04e0c200 0x140 0x0
+}
+
+G=/sys/kernel/config/usb_gadget/g1
+
+setup_gadget() {
+	udc=$(ls /sys/class/udc | head -n 1)
+	[ -n "$udc" ] || return 1
+	mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409" "$G/functions/acm.usb0"
+	echo 0x1d6b >"$G/idVendor"
+	echo 0x0104 >"$G/idProduct"
+	echo tapas >"$G/strings/0x409/serialnumber"
+	echo Xiaomi >"$G/strings/0x409/manufacturer"
+	echo "Redmi Note 12 4G debug" >"$G/strings/0x409/product"
+	echo ACM >"$G/configs/c.1/strings/0x409/configuration"
+	ln -sfn "$G/functions/acm.usb0" "$G/configs/c.1/acm.usb0"
+	echo "" >"$G/UDC" 2>/dev/null
+	sleep 0.3
+	rmw32 0x04ef8810 0x0 0x10100000
+	echo "$udc" >"$G/UDC" || return 1
+	# Toggle the PHY suspend bit so the host sees the device
+	rmw32 0x04e0c704 0x80000000 0x0
+	sleep 0.3
+	rmw32 0x04ef8810 0x0 0x10100000
+	rmw32 0x04e0c704 0x0 0x80000000
+}
+
+cat >/etc/profile <<'EOF'
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PS1='tapas# '
+echo "Redmi Note 12 4G bring-up shell"
+echo "  last_kmsg   log of the previous boot, if it left one"
+echo "  stay        do not switch to the root filesystem"
+alias last_kmsg='cat /tmp/last_kmsg'
+alias stay='touch /tmp/stay; echo staying in the bring-up shell'
+EOF
+
+usb_phy_init >/dev/null 2>&1
+for _ in $(seq 15); do
+	[ -n "$(ls /sys/class/udc)" ] && break
+	sleep 1
+done
+if setup_gadget >/dev/null 2>&1; then
+	log "USB serial is up (115200, CDC ACM)"
+	(
+		while :; do
+			[ -c /dev/ttyGS0 ] && setsid cttyhack sh -l \
+				</dev/ttyGS0 >/dev/ttyGS0 2>&1
+			sleep 1
+		done
+	) &
+	shell_loop=$!
+else
+	log "USB gadget failed, udc: '$(ls /sys/class/udc)'"
+fi
+
+sleep 3
+mdev -s
+
+log "block devices:"
+for b in /sys/class/block/*; do
+	name=${b##*/}
+	part=$(sed -n 's/^PARTNAME=//p' "$b/uevent")
+	size=$(( $(cat "$b/size") / 2048 ))
+	case $name in
+	sd?|mmcblk?) log "  $name ${size} MiB" ;;
+	*) [ -n "$part" ] && [ "$size" -gt 64 ] && log "  $name $part ${size} MiB" ;;
+	esac
+done
+
+root=$(blkid | sed -n 's/^\([^:]*\):.* LABEL="tapas_root".*/\1/p' | head -n 1)
+if [ -n "$root" ] && mount -o rw "$root" /newroot; then
+	init=
+	for i in /sbin/init /usr/lib/systemd/systemd; do
+		[ -x "/newroot$i" ] || [ -L "/newroot$i" ] && init=$i && break
+	done
+	if [ -n "$init" ]; then
+		log "root filesystem on $root, starting $init in 10 s (run 'stay' on USB serial to stop)"
+		sleep 10
+		if [ ! -e /tmp/stay ]; then
+			if [ -n "$shell_loop" ]; then
+				pkill -P "$shell_loop"
+				kill "$shell_loop"
+			fi
+			echo "" >"$G/UDC" 2>/dev/null
+			umount /tmp /sys/fs/pstore /sys/kernel/config /dev/pts 2>/dev/null
+			mount --move /dev /newroot/dev
+			mount --move /proc /newroot/proc
+			mount --move /sys /newroot/sys
+			exec switch_root /newroot "$init"
+		fi
+	else
+		log "$root has no init"
+		umount /newroot
+	fi
+else
+	log "no filesystem labelled tapas_root"
+fi
+
+log "staying in the bring-up shell"
+while :; do
+	sleep 3600
+done
