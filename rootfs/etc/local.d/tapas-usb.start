@@ -1,0 +1,36 @@
+#!/bin/sh
+# USB gadget for the bring-up: ECM network (phone 172.16.42.1, DHCP gives
+# the host 172.16.42.2, ssh and telnet on that address) and a CDC ACM
+# serial login. The initramfs made the same gadget and unbound it before
+# switching here; its configfs items may still exist.
+G=/sys/kernel/config/usb_gadget/g1
+
+mountpoint -q /sys/kernel/config || mount -t configfs configfs /sys/kernel/config
+udc=$(ls /sys/class/udc | head -n 1)
+[ -n "$udc" ] || { echo "tapas-usb: no UDC" >/dev/kmsg; exit 0; }
+
+mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409" \
+	"$G/functions/ecm.usb0" "$G/functions/acm.usb0"
+echo 0x1d6b >"$G/idVendor"
+echo 0x0104 >"$G/idProduct"
+echo tapas >"$G/strings/0x409/serialnumber"
+echo Xiaomi >"$G/strings/0x409/manufacturer"
+echo "Redmi Note 12 4G" >"$G/strings/0x409/product"
+echo ECM+ACM >"$G/configs/c.1/strings/0x409/configuration"
+echo 02:7a:70:61:73:01 >"$G/functions/ecm.usb0/dev_addr" 2>/dev/null
+echo 02:7a:70:61:73:02 >"$G/functions/ecm.usb0/host_addr" 2>/dev/null
+[ -e "$G/configs/c.1/ecm.usb0" ] || ln -s "$G/functions/ecm.usb0" "$G/configs/c.1/ecm.usb0"
+[ -e "$G/configs/c.1/acm.usb0" ] || ln -s "$G/functions/acm.usb0" "$G/configs/c.1/acm.usb0"
+[ "$(cat "$G/UDC")" = "$udc" ] || echo "$udc" >"$G/UDC"
+
+ifname=$(cat "$G/functions/ecm.usb0/ifname")
+ip addr flush dev "$ifname"
+ip addr add 172.16.42.1/24 dev "$ifname"
+ip link set "$ifname" up
+udhcpd /etc/udhcpd/usb0.conf
+telnetd -b 172.16.42.1 -l /bin/sh
+( while :; do
+	[ -c /dev/ttyGS0 ] && getty -L 115200 ttyGS0 vt100
+	sleep 2
+done ) >/dev/null 2>&1 &
+echo "tapas-usb: $ifname up, ssh user@172.16.42.1" >/dev/kmsg
