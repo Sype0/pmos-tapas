@@ -189,7 +189,18 @@ for b in /sys/class/block/*; do
 	esac
 done
 
-root=$(blkid | sed -n 's/^\([^:]*\):.* LABEL="tapas_root".*/\1/p' | head -n 1)
+# The ext4 label, read from the superblock (this busybox has no blkid):
+# magic 0xef53 at byte 1080, the label is the 16 bytes at 1144
+ext4_label() {
+	[ "$(dd if="$1" bs=1 skip=1080 count=2 2>/dev/null | od -An -tx1 | tr -d ' \n')" = 53ef ] ||
+		return 1
+	dd if="$1" bs=1 skip=1144 count=16 2>/dev/null | tr -d '\000'
+}
+root=
+for b in /sys/class/block/*; do
+	[ -b "/dev/${b##*/}" ] && [ "$(ext4_label "/dev/${b##*/}")" = tapas_root ] &&
+		root=/dev/${b##*/} && break
+done
 if [ -n "$root" ] && mount -o rw "$root" /newroot; then
 	init=
 	for i in /sbin/init /usr/lib/systemd/systemd; do

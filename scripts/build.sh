@@ -40,7 +40,7 @@ BUSYBOX=${BUSYBOX:-$(command -v busybox)}
 file -L "$BUSYBOX" | grep -Eq 'ARM aarch64.*static(ally|-pie) linked' ||
 	{ echo "$BUSYBOX is not a static aarch64 busybox" >&2; exit 1; }
 # Applets the init needs for the network shell and the register dumps
-for applet in telnetd udhcpd ifconfig devmem setsid cttyhack; do
+for applet in telnetd udhcpd ifconfig devmem setsid cttyhack dd od tr; do
 	"$BUSYBOX" --list | grep -qx "$applet" ||
 		{ echo "$BUSYBOX has no $applet" >&2; exit 1; }
 done
