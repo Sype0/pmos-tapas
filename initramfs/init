@@ -8,6 +8,10 @@
 # when a filesystem labelled "tapas_root" with an init exists, switches to
 # it after a countdown that the serial shell can stop.
 #
+# The same USB gadget is also an ECM network card (the tablet used as host
+# has cdc_ether but no cdc_acm): the phone is 172.16.42.1, hands out
+# 172.16.42.2 by DHCP and runs telnetd, so `telnet 172.16.42.1` is a shell.
+#
 # USB comes from the device tree. If no UDC shows up, the init falls back
 # to bringing the USB clocks and PHY up by hand, the sequence the Redmi 10C
 # (same SoC) port needed: https://github.com/Damir00109/Redmi10c
@@ -78,13 +82,18 @@ G=/sys/kernel/config/usb_gadget/g1
 setup_gadget() {
 	udc=$(ls /sys/class/udc | head -n 1)
 	[ -n "$udc" ] || return 1
-	mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409" "$G/functions/acm.usb0"
+	mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409" \
+		"$G/functions/ecm.usb0" "$G/functions/acm.usb0"
 	echo 0x1d6b >"$G/idVendor"
 	echo 0x0104 >"$G/idProduct"
 	echo tapas >"$G/strings/0x409/serialnumber"
 	echo Xiaomi >"$G/strings/0x409/manufacturer"
 	echo "Redmi Note 12 4G debug" >"$G/strings/0x409/product"
-	echo ACM >"$G/configs/c.1/strings/0x409/configuration"
+	echo ECM+ACM >"$G/configs/c.1/strings/0x409/configuration"
+	# Fixed addresses, so the host keeps the same interface name
+	echo 02:7a:70:61:73:01 >"$G/functions/ecm.usb0/dev_addr"
+	echo 02:7a:70:61:73:02 >"$G/functions/ecm.usb0/host_addr"
+	ln -sfn "$G/functions/ecm.usb0" "$G/configs/c.1/ecm.usb0"
 	ln -sfn "$G/functions/acm.usb0" "$G/configs/c.1/acm.usb0"
 	echo "" >"$G/UDC" 2>/dev/null
 	sleep 0.3
@@ -97,6 +106,35 @@ setup_gadget() {
 	rmw32 0x04ef8810 0x0 0x10100000
 	rmw32 0x04e0c704 0x0 0x80000000
 }
+
+# Network side of the gadget: address, DHCP for the host, telnet shell
+setup_net() {
+	ifname=$(cat "$G/functions/ecm.usb0/ifname" 2>/dev/null)
+	[ -n "$ifname" ] || return 1
+	ifconfig "$ifname" 172.16.42.1 netmask 255.255.255.0 up || return 1
+	printf '%s\n' "start 172.16.42.2" "end 172.16.42.2" \
+		"interface $ifname" "lease_file /tmp/udhcpd.leases" \
+		"option subnet 255.255.255.0" >/etc/udhcpd.conf
+	touch /tmp/udhcpd.leases
+	udhcpd /etc/udhcpd.conf
+	telnetd -l /bin/sh
+	log "network on $ifname: telnet 172.16.42.1"
+}
+
+# Where the bootloader's display scans out from: source size, address,
+# stride and format of the DPU pipes ABL may use (VIG0, DMA0, DMA1)
+cat >/bin/mdpregs <<'EOF'
+#!/bin/sh
+for p in vig0:0x05e05000 dma0:0x05e25000 dma1:0x05e27000; do
+	b=${p#*:}
+	printf '%s' "${p%%:*}"
+	for r in 0x00:size 0x14:addr 0x24:stride 0x30:format; do
+		printf ' %s=%s' "${r#*:}" "$(devmem $(( b + ${r%%:*} )) 32)"
+	done
+	echo
+done
+EOF
+chmod 755 /bin/mdpregs
 
 cat >/etc/profile <<'EOF'
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -132,6 +170,7 @@ if setup_gadget >/dev/null 2>&1; then
 		done
 	) &
 	shell_loop=$!
+	setup_net || log "no network on the gadget"
 else
 	log "USB gadget failed, udc: '$(ls /sys/class/udc)'"
 fi
@@ -164,6 +203,8 @@ if [ -n "$root" ] && mount -o rw "$root" /newroot; then
 				pkill -P "$shell_loop"
 				kill "$shell_loop"
 			fi
+			pkill telnetd
+			pkill udhcpd
 			echo "" >"$G/UDC" 2>/dev/null
 			umount /tmp /sys/fs/pstore /sys/kernel/config /dev/pts 2>/dev/null
 			mount --move /dev /newroot/dev

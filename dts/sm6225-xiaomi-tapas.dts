@@ -82,6 +82,15 @@
 	};
 };
 
+/*
+ * Leave the display clocks as the bootloader set them: dispcc reprograms
+ * its PLL when it probes, which broke the splash scanout under the
+ * framebuffer (grey screen, blue stripes). The MDSS is disabled anyway.
+ */
+&dispcc {
+	status = "disabled";
+};
+
 &pon_pwrkey {
 	status = "okay";
 };
