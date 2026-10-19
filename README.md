@@ -44,16 +44,27 @@ small shim (`shim/start.S`) with our DTB and the real kernel behind it: ABL
 starts the shim like a kernel, the shim drops ABL's DTB and starts the
 mainline kernel with ours. The initramfs is built into the kernel.
 
-The shim draws a bar at the top of the screen as it goes, so the first
-seconds can be told apart:
+The shim draws bands of 48 rows from the top of the screen as it goes, so a
+photo of the first seconds tells how far it got:
 
-| Bar | Meaning |
+| Band | Shows |
 | --- | --- |
 | none, back to the logo or fastboot | ABL did not start the image |
-| blue | the shim runs |
-| yellow | the kernel was copied to a 2 MB boundary |
-| green | jumping into the kernel; the kernel log should follow |
-| red | the image is broken (bad descriptor) |
+| 0 blue | the shim runs |
+| 1, 2 bits | where ABL loaded the image (bits 63..32, 31..0) |
+| 3 yellow blocks | one per 2 MB of kernel copied to 0x80000000 |
+| 4 green | jumping into the kernel; the kernel log should follow |
+| 5 red | the image is broken (bad descriptor) |
+| 5 magenta / cyan / white / orange | exception (sync / IRQ / FIQ / SError), details in 6-9 |
+| 6, 7, 8, 9 bits | ESR_EL1, FAR_EL1 (63..32, 31..0), ELR_EL1 minus the load address |
+| 10, 11 bits | SCTLR_EL1 and CurrentEL at entry |
+
+Bits are 32 squares, most significant first: bright is 1, dark is 0,
+alternating nibbles in white/grey and orange/navy.
+
+ABL loads the image low in RAM, where the kernel (with its BSS) would run
+into the hypervisor and the other carveouts from 0x45700000 up, so the shim
+always copies it to the free bank at 0x80000000.
 
 Since ABL does not see our DTB, it does not fill in the memory node: the
 device tree has the layout ABL reports on the **6 GB** model. Other RAM
