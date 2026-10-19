@@ -30,16 +30,17 @@ def main():
         sys.exit(f"{kernel_path} is not an uncompressed arm64 Image")
     kernel_mem = struct.unpack_from("<Q", kernel, 16)[0] or len(kernel)
 
-    out = bytearray(KERNEL_OFF + len(kernel))
+    # Padded to 4K like the images known to boot on this ABL
+    out = bytearray((KERNEL_OFF + len(kernel) + 0xFFF) & ~0xFFF)
     out[: len(shim)] = shim
     struct.pack_into("<6Q", out, DESC_OFF, DESC_MAGIC, KERNEL_OFF, len(kernel),
                      kernel_mem, DTB_OFF, len(dtb))
     out[DTB_OFF : DTB_OFF + len(dtb)] = dtb
-    out[KERNEL_OFF:] = kernel
-    # The shim's header: what the kernel needs in memory where it lies in
-    # the file (incl. its BSS), as a real Image reports it, so ABL puts its
-    # own DTB and ramdisk out of the way
-    struct.pack_into("<Q", out, 16, KERNEL_OFF + max(kernel_mem, len(kernel)))
+    out[KERNEL_OFF : KERNEL_OFF + len(kernel)] = kernel
+    # The shim's header: image_size = the file, as in the v4 images that
+    # topaz-woa (Mu-Silicium) and ios-topaz boot on this ABL. Whatever ABL
+    # places right after it (its DTB, the vendor ramdisk) is not used.
+    struct.pack_into("<Q", out, 16, len(out))
     open(out_path, "wb").write(out)
     print(f"{out_path}: {len(out)} bytes (kernel {len(kernel)}, in memory {kernel_mem}; dtb {len(dtb)})")
 
