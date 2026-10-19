@@ -58,6 +58,7 @@ photo of the first seconds tells how far it got:
 | 5 magenta / cyan / white / orange | exception (sync / IRQ / FIQ / SError), details in 6-9 |
 | 6, 7, 8, 9 bits | ESR_EL1, FAR_EL1 (63..32, 31..0), ELR_EL1 minus the load address |
 | 10, 11 bits | SCTLR_EL1 and CurrentEL at entry |
+| 12-75 ruler | a tick per band, (band % 10 + 1) × 100 px wide, white in even tens, cyan in odd: the last one visible shows where the screen ends in the splash buffer |
 
 Bits are 32 squares, most significant first: bright is 1, dark is 0,
 alternating nibbles in white/grey and orange/navy.

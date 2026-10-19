@@ -36,6 +36,9 @@
  *   9  bits     ELR_EL1 - load   /
  *  10  bits     SCTLR_EL1 at entry
  *  11  bits     CurrentEL at entry
+ *  12-75 ruler  a tick per band, (band % 10 + 1) * 100 px wide, white in
+ *               even tens and cyan in odd ones: the last one visible tells
+ *               where the screen ends in the splash buffer
  * Bits read most significant first, 1 bright, 0 dark, every other nibble in
  * a second pair of colours (white/grey, then orange/navy).
  * After green, the kernel's own console takes over the screen.
@@ -62,6 +65,8 @@
 #define CHUNK		0x200000	/* copy progress: one block per chunk */
 #define BLOCK_W		40
 #define BLOCKS		(FB_WIDTH / BLOCK_W)
+#define RULER_FIRST	12
+#define RULER_LAST	75	/* the splash region is 0xf00000: 3640 rows */
 
 	.section .text.head, "ax"
 	.globl	_head
@@ -103,6 +108,25 @@ start:
 	mov	w0, w28
 	mov	x1, #11
 	bl	bits
+
+	mov	x19, #RULER_FIRST
+12:	mov	x2, #10
+	udiv	x9, x19, x2
+	msub	x2, x9, x2, x19
+	add	x2, x2, #1
+	mov	x0, #100
+	mul	x2, x2, x0		/* (band % 10 + 1) * 100 */
+	mov	x0, #0
+	mov	x1, #BAND
+	mul	x1, x19, x1
+	mov	x3, #8
+	mov	w4, #0xffffff		/* white */
+	tbz	x9, #0, 13f
+	mov	w4, #0x00ffff		/* cyan */
+13:	bl	rect
+	add	x19, x19, #1
+	cmp	x19, #RULER_LAST
+	b.ls	12b
 
 	add	x21, x20, #DESC_OFF
 	ldr	x0, [x21, #D_MAGIC]
