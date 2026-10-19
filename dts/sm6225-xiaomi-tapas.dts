@@ -145,11 +145,12 @@
 			regulator-max-microvolt = <880000>;
 		};
 
-		/* SD card I/O */
+		/* SD card I/O; SDHCI breaks if it is ever turned off (spes) */
 		pm6125_l5: l5 {
-			regulator-min-microvolt = <1650000>;
-			regulator-max-microvolt = <3050000>;
+			regulator-min-microvolt = <1648000>;
+			regulator-max-microvolt = <3200000>;
 			regulator-allow-set-load;
+			regulator-always-on;
 		};
 
 		pm6125_l6: l6 {
@@ -157,9 +158,11 @@
 			regulator-max-microvolt = <650000>;
 		};
 
+		/* SD card I/O bias (stock vdd-io-bias-supply), 1.256V */
 		pm6125_l7: l7 {
-			regulator-min-microvolt = <1200000>;
-			regulator-max-microvolt = <1300000>;
+			regulator-min-microvolt = <1256000>;
+			regulator-max-microvolt = <1256000>;
+			regulator-always-on;
 		};
 
 		pm6125_l8: l8 {
@@ -285,6 +288,13 @@
 
 	vmmc-supply = <&pm6125_l22>;
 	vqmmc-supply = <&pm6125_l5>;
+
+	/* sm6225.dtsi leaves bus-width out, and UHS-I needs 4 bits */
+	bus-width = <4>;
+	no-sdio;
+	no-mmc;
+	/* Stock qcom,dll-hsr-list */
+	qcom,ddr-config = <0x80040868>;
 
 	broken-cd;
 	status = "okay";
