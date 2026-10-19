@@ -3,35 +3,30 @@
 #
 #   scripts/build.sh [out-dir]
 #
-# Needs: git, make, gcc (aarch64 native, or aarch64-linux-gnu- cross),
-# bc, bison, flex, libssl-dev, cpio, gzip, python3 and a static aarch64
-# busybox (BUSYBOX=/path, default: the one in PATH).
+# Needs: make, clang, lld, llvm, bc, bison, flex, libssl-dev, libelf-dev,
+# cpio, gzip, curl, python3 and a static aarch64 busybox (BUSYBOX=/path,
+# default: the one in PATH).
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
 WORK=${WORK:-$ROOT/work}
-KERNEL_TAG=v7.1.5
-KERNEL_REPO=https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-SRC=$WORK/linux
+# sm6225-mainline kernel, branch stable-sm6225 (7.2.9)
+KERNEL_COMMIT=b8463e4b9111517f89da970d1e1145b851ce8d48
+KERNEL_URL=https://gitlab.postmarketos.org/sm6225-mainline/kernels/linux-v.7.2.1/-/archive/$KERNEL_COMMIT.tar.gz
+SRC=$WORK/linux-$KERNEL_COMMIT
 KOUT=$WORK/kernel-out
 DTS_DIR=arch/arm64/boot/dts/qcom
 VARIANTS="tapas tapas-safe"
-
-if [ "$(uname -m)" != aarch64 ]; then
-	export CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
-fi
-export ARCH=arm64
+# Built with LLVM like the sm6225-mainline pmaports package
+KMAKE="make -C $SRC O=$KOUT ARCH=arm64 LLVM=1"
 
 mkdir -p "$WORK"
 
 # Kernel sources
 if [ ! -d "$SRC" ]; then
-	git clone --depth 1 --branch "$KERNEL_TAG" "$KERNEL_REPO" "$SRC"
-	for p in "$ROOT"/patches/*.patch; do
-		echo "Applying ${p##*/}"
-		git -C "$SRC" apply --whitespace=nowarn "$p"
-	done
+	curl -fL --retry 3 "$KERNEL_URL" | tar -xz -C "$WORK"
+	mv "$WORK/linux-v.7.2.1-$KERNEL_COMMIT" "$SRC"
 fi
 cp "$ROOT"/dts/*.dts "$SRC/$DTS_DIR/"
 for v in $VARIANTS; do
@@ -39,41 +34,54 @@ for v in $VARIANTS; do
 		echo "dtb-\$(CONFIG_ARCH_QCOM) += sm6225-xiaomi-$v.dtb" >>"$SRC/$DTS_DIR/Makefile"
 done
 
-# Config
-mkdir -p "$KOUT"
-cp "$ROOT/config/base.config" "$KOUT/.config"
-"$SRC/scripts/kconfig/merge_config.sh" -m -O "$KOUT" "$KOUT/.config" "$ROOT/config/tapas.config"
-make -C "$SRC" O="$KOUT" olddefconfig
-# merge_config only warns when a value does not stick, fail instead
-grep -v '^#' "$ROOT/config/tapas.config" | grep . | while IFS= read -r opt; do
-	grep -qxF "$opt" "$KOUT/.config" || { echo "Config option not applied: $opt" >&2; exit 1; }
-done
-
-# Kernel and device trees
-make -C "$SRC" O="$KOUT" -j"$(nproc)" Image.gz $(for v in $VARIANTS; do echo "qcom/sm6225-xiaomi-$v.dtb"; done)
-KREL=$(cat "$KOUT/include/config/kernel.release")
-
-# Initramfs: busybox and the bring-up init
+# Initramfs: busybox and the bring-up init. Built into the kernel, because
+# ABL drops the boot image's ramdisk.
 BUSYBOX=${BUSYBOX:-$(command -v busybox)}
 file -L "$BUSYBOX" | grep -Eq 'ARM aarch64.*static(ally|-pie) linked' ||
 	{ echo "$BUSYBOX is not a static aarch64 busybox" >&2; exit 1; }
-IR=$WORK/initramfs
-rm -rf "$IR"
-mkdir -p "$IR/bin"
-cp -L "$BUSYBOX" "$IR/bin/busybox"
-install -m 755 "$ROOT/initramfs/init" "$IR/init"
-(cd "$IR" && find . | sort | cpio -o -H newc -R 0:0 --quiet | gzip -9n) >"$WORK/initramfs.cpio.gz"
+# A gen_init_cpio list, so /dev/console exists without root
+cat >"$WORK/initramfs.list" <<EOF
+dir /bin 755 0 0
+file /bin/busybox $(readlink -f "$BUSYBOX") 755 0 0
+file /init $ROOT/initramfs/init 755 0 0
+dir /dev 755 0 0
+nod /dev/console 600 0 0 c 5 1
+EOF
 
-# Boot images: header v1 with the DTB appended to the gzipped kernel, the
-# format the tapas bootloader is known to take (Mu-Silicium boots this way)
+# Config
+mkdir -p "$KOUT"
+cp "$ROOT/config/base.config" "$KOUT/.config"
+{
+	cat "$ROOT/config/tapas.config"
+	echo "CONFIG_INITRAMFS_SOURCE=\"$WORK/initramfs.list\""
+} >"$WORK/tapas.config"
+"$SRC/scripts/kconfig/merge_config.sh" -m -O "$KOUT" "$KOUT/.config" "$WORK/tapas.config"
+$KMAKE olddefconfig
+# merge_config only warns when a value does not stick, fail instead
+grep -v '^#' "$WORK/tapas.config" | grep . | while IFS= read -r opt; do
+	grep -qxF "$opt" "$KOUT/.config" || { echo "Config option not applied: $opt" >&2; exit 1; }
+done
+
+# Kernel (uncompressed: the shim jumps into it) and device trees
+$KMAKE -j"$(nproc)" Image $(for v in $VARIANTS; do echo "qcom/sm6225-xiaomi-$v.dtb"; done)
+KREL=$(cat "$KOUT/include/config/kernel.release")
+
+# Boot shim (shim/start.S)
+clang --target=aarch64-linux-gnu -c "$ROOT/shim/start.S" -o "$WORK/shim.o"
+ld.lld -T "$ROOT/shim/shim.ld" --build-id=none -o "$WORK/shim.elf" "$WORK/shim.o"
+llvm-objcopy -O binary "$WORK/shim.elf" "$WORK/shim.bin"
+
+# Boot images v4 (Xiaomi's ABL ignores v1/v2): the "kernel" is the shim with
+# our DTB and the kernel behind it. The ramdisk is never used, but ABL wants
+# one, so it gets an empty cpio.
+(mkdir -p "$WORK/empty" && cd "$WORK/empty" && find . | cpio -o -H newc -R 0:0 --quiet | gzip -9n) >"$WORK/empty.cpio.gz"
 for v in $VARIANTS; do
-	cat "$KOUT/arch/arm64/boot/Image.gz" "$KOUT/$DTS_DIR/sm6225-xiaomi-$v.dtb" >"$WORK/Image.gz-dtb-$v"
+	python3 "$ROOT/scripts/pack-shim.py" "$WORK/shim.bin" "$KOUT/$DTS_DIR/sm6225-xiaomi-$v.dtb" \
+		"$KOUT/arch/arm64/boot/Image" "$WORK/shim-$v.bin"
 	python3 "$ROOT/scripts/mkbootimg.py" \
-		--header_version 1 \
-		--kernel "$WORK/Image.gz-dtb-$v" \
-		--ramdisk "$WORK/initramfs.cpio.gz" \
-		--pagesize 4096 \
-		--base 0x0 --kernel_offset 0x8000 --ramdisk_offset 0x1000000 --tags_offset 0x100 \
+		--header_version 4 \
+		--kernel "$WORK/shim-$v.bin" \
+		--ramdisk "$WORK/empty.cpio.gz" \
 		--os_version 13.0.0 --os_patch_level 2026-10 \
 		--cmdline "" \
 		--output "$OUT/boot-$v.img"

@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libssl-dev libelf-dev cpio file \
-            busybox-static
+            clang lld llvm curl busybox-static
 
       - name: Build
         run: scripts/build.sh dist
@@ -50,10 +50,12 @@ jobs:
           cat > notes.md <<NOTES
           Bring-up boot images for the Redmi Note 12 4G (tapas), mainline $(cat dist/kernel.release), built from ${GITHUB_SHA::7}.
 
-          **Not tested on a device yet.** Flash them to the boot partition of the inactive slot only, see the README.
+          **Not tested on a device yet.**
 
           - \`boot-tapas.img\`: framebuffer, USB serial, keys, UFS and SD card
           - \`boot-tapas-safe.img\`: framebuffer, USB serial and keys only
+
+          Try them with \`fastboot boot\` first (nothing is written), see the README.
           NOTES
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest --prerelease --target "${GITHUB_SHA}" \

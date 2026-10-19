@@ -8,8 +8,10 @@
 # when a filesystem labelled "tapas_root" with an init exists, switches to
 # it after a countdown that the serial shell can stop.
 #
-# The USB bring-up sequence is the one the Redmi 10C (same SoC) port uses:
-# https://github.com/Damir00109/Redmi10c (tools/pivot-init)
+# USB comes from the device tree. If no UDC shows up, the init falls back
+# to bringing the USB clocks and PHY up by hand, the sequence the Redmi 10C
+# (same SoC) port needed: https://github.com/Damir00109/Redmi10c
+# (tools/pivot-init)
 
 /bin/busybox mkdir -p /proc /sys /dev /tmp /etc /newroot /sbin /usr/bin /usr/sbin
 /bin/busybox --install -s
@@ -45,9 +47,8 @@ rmw32() {
 	devmem "$1" 32 "$(printf '0x%08x' $(( (cur & ~$2) | $3 )))"
 }
 
-# The USB clocks and PHY are not described in the device tree yet, so
-# they are brought up by hand: USB30 GDSC and clocks in GCC, then the
-# QSCRATCH and SNPS femto PHY settings.
+# Fallback when the drivers did not bring USB up: USB30 GDSC and clocks
+# in GCC, then the QSCRATCH and SNPS femto PHY settings, by hand.
 usb_phy_init() {
 	rmw32 0x0141a004 0x1 0x0
 	for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -87,8 +88,9 @@ setup_gadget() {
 	ln -sfn "$G/functions/acm.usb0" "$G/configs/c.1/acm.usb0"
 	echo "" >"$G/UDC" 2>/dev/null
 	sleep 0.3
-	rmw32 0x04ef8810 0x0 0x10100000
+	[ -n "$usb_by_hand" ] && rmw32 0x04ef8810 0x0 0x10100000
 	echo "$udc" >"$G/UDC" || return 1
+	[ -n "$usb_by_hand" ] || return 0
 	# Toggle the PHY suspend bit so the host sees the device
 	rmw32 0x04e0c704 0x80000000 0x0
 	sleep 0.3
@@ -106,11 +108,20 @@ alias last_kmsg='cat /tmp/last_kmsg'
 alias stay='touch /tmp/stay; echo staying in the bring-up shell'
 EOF
 
-usb_phy_init >/dev/null 2>&1
-for _ in $(seq 15); do
-	[ -n "$(ls /sys/class/udc)" ] && break
-	sleep 1
-done
+usb_by_hand=
+wait_udc() {
+	for _ in $(seq "$1"); do
+		[ -n "$(ls /sys/class/udc)" ] && return 0
+		sleep 1
+	done
+	return 1
+}
+if ! wait_udc 10; then
+	log "no USB controller from the drivers, bringing it up by hand"
+	usb_by_hand=1
+	usb_phy_init >/dev/null 2>&1
+	wait_udc 15
+fi
 if setup_gadget >/dev/null 2>&1; then
 	log "USB serial is up (115200, CDC ACM)"
 	(
