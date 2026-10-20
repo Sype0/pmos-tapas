@@ -200,6 +200,12 @@
 		 * through a switch (gpio66) for that, and here they belong to
 		 * the USB gadget.
 		 */
+		/*
+		 * Keep the bootloader's register state: a chip reset turns
+		 * OTG_CONFIG back on (its default), and the phone would start
+		 * putting 5 V on the cable to the fastboot host.
+		 */
+		linux,skip-reset;
 	};
 
 	fuel-gauge@71 {
