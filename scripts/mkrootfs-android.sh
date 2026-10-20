@@ -9,7 +9,7 @@ set -e
 TAR=$1 FILES=$2 IMG=$3
 W=/data/local/tmp/tapas-rootfs
 M=$W/mnt
-SIZE_MB=2048
+SIZE_MB=3072
 
 cleanup() {
 	for d in dev/pts dev proc sys; do umount "$M/$d" 2>/dev/null || true; done
@@ -45,6 +45,8 @@ $C /sbin/apk update
 $C /sbin/apk add alpine-base openrc busybox-extras busybox-openrc openssh \
 	e2fsprogs util-linux dosfstools doas nano htop pciutils usbutils \
 	kmod tzdata iw bash
+# Phosh, drawn with llvmpipe on the bootloader's framebuffer (simpledrm)
+$C /sbin/apk add postmarketos-ui-phosh postmarketos-ui-phosh-openrc mesa-dri-gallium
 
 # Board files: gadget network, services, fstab, inittab
 cp -R "$FILES"/. "$M"/
@@ -56,6 +58,7 @@ $C /bin/sh -c '
 set -e
 ln -sf /usr/share/zoneinfo/Europe/Istanbul /etc/localtime
 adduser -D -s /bin/bash -G wheel user
+for g in audio input video netdev plugdev feedbackd; do addgroup user $g; done
 echo "user:147147" | chpasswd
 echo "root:147147" | chpasswd
 echo "permit persist :wheel" >/etc/doas.d/wheel.conf
