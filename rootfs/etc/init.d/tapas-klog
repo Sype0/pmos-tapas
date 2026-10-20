@@ -12,6 +12,19 @@ depend() {
 start() {
 	ebegin "Saving kernel log to /var/log/kmsg.log"
 	cd /var/log || return 1
+	# Move the previous boot's logs to boots/<n>-<variant>, so a series of
+	# test boots with different images can be read back together.
+	if [ -f boot-variant ]; then
+		n=$(ls -d boots/[0-9]* 2>/dev/null | wc -l)
+		d=boots/$(printf %02d $((n + 1)))-$(cat boot-variant)
+		mkdir -p "$d"
+		for f in boot-variant kmsg.log usb-state.log rc.log tapas-*.log \
+			touch-raw.bin syslog-copy.log logbookd.db; do
+			[ -f $f ] && mv -f $f "$d"/
+		done
+	fi
+	tr -d '\0' </proc/device-tree/model |
+		sed -n 's/.*(\(.*\))$/\1/p;t;s/.*/main/p' >boot-variant
 	for f in kmsg.log usb-state.log; do
 		[ -f $f ] && mv -f $f $f.prev
 	done
