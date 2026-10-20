@@ -96,8 +96,9 @@ sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
 for s in hwclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
 for s in local sshd crond rmtfs tqftpserv msm-modem-uim-selection; do rc-update add $s default; done
-# Greeter: phrog, with the on-screen keyboard (its autostart dir is empty)
-sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/phrog/greetd-config.toml\"|" /etc/conf.d/greetd
+# Autologin into Phosh (rootfs/etc/greetd/config.toml); phrog, with the
+# on-screen keyboard (its autostart dir is empty), stays as the fallback
+sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/greetd/config.toml\"|" /etc/conf.d/greetd
 mkdir -p /etc/phrog/autostart
 ln -sf /usr/share/applications/sm.puri.OSK0.desktop /etc/phrog/autostart/
 glib-compile-schemas /usr/share/glib-2.0/schemas

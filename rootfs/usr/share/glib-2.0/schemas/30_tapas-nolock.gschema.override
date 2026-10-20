@@ -1,0 +1,7 @@
+# tapas: with autologin and no working swipes, a locked screen can't be
+# unlocked: never lock, never blank
+[org.gnome.desktop.screensaver]
+lock-enabled=false
+
+[org.gnome.desktop.session]
+idle-delay=uint32 0

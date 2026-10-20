@@ -1,0 +1,14 @@
+# tapas: no greeter. The touchscreen has no working drags yet, so neither
+# phrog's swipe-up keypad nor the on-screen keyboard can be used: log `user`
+# straight into Phosh. If that session ends, greetd falls back to phrog.
+
+[terminal]
+vt = 7
+
+[initial_session]
+command = "/usr/local/bin/tapas-phosh"
+user = "user"
+
+[default_session]
+command = "/usr/libexec/phrog-greetd-session"
+user = "greetd"
