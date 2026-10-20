@@ -54,7 +54,7 @@ $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
 
 # Board files: gadget network, services, fstab, inittab, Phosh tweaks
 cp -R "$FILES"/. "$M"/
-chmod 755 "$M"/etc/local.d/*.start "$M/etc/init.d/tapas-klog"
+chmod 755 "$M"/etc/local.d/*.start "$M"/etc/init.d/tapas-*
 
 # Stock firmware from this phone's vendor partitions: GPU, modem (with the
 # Wi-Fi firmware it runs and its carrier configs), IPA, Bluetooth, and the
@@ -92,7 +92,7 @@ echo "permit persist :wheel" >/etc/doas.d/wheel.conf
 sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 # postmarketos-base comes in for alpine-base and brings udev
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
-for s in hwclock modules sysctl hostname bootmisc syslog; do rc-update add $s boot; done
+for s in hwclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
 for s in local sshd crond rmtfs tqftpserv msm-modem-uim-selection; do rc-update add $s default; done
 # Greeter: phrog, with the on-screen keyboard (its autostart dir is empty)
 sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/phrog/greetd-config.toml\"|" /etc/conf.d/greetd

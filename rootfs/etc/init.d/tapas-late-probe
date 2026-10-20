@@ -1,0 +1,26 @@
+#!/sbin/openrc-run
+# These probe before the root filesystem, and so /lib/firmware, is mounted:
+# IPA fails its probe without ipa_fws, and the Bluetooth controller's setup
+# fails without its firmware, which leaves hci0 stuck in setup. Probe them
+# again once the firmware is there, before the modem is started.
+
+description="Re-probe drivers that load firmware from the root filesystem"
+
+depend() {
+	need localmount
+	after udev
+	before rmtfs bluetooth
+}
+
+start() {
+	ebegin "Re-probing IPA and Bluetooth"
+	for d in /sys/bus/platform/devices/*.ipa; do
+		[ -e "$d/driver" ] || echo "${d##*/}" >/sys/bus/platform/drivers_probe
+	done
+	for d in /sys/bus/serial/drivers/hci_uart_qca/serial*; do
+		[ -e "$d" ] || continue
+		echo "${d##*/}" >/sys/bus/serial/drivers/hci_uart_qca/unbind
+		echo "${d##*/}" >/sys/bus/serial/drivers/hci_uart_qca/bind
+	done
+	eend 0
+}
