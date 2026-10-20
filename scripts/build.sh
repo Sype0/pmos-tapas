@@ -17,7 +17,7 @@ KERNEL_URL=https://gitlab.postmarketos.org/sm6225-mainline/kernels/linux-v.7.2.1
 SRC=$WORK/linux-$KERNEL_COMMIT
 KOUT=$WORK/kernel-out
 DTS_DIR=arch/arm64/boot/dts/qcom
-VARIANTS="tapas tapas-safe tapas-display"
+VARIANTS="tapas tapas-safe tapas-display tapas-audio"
 # Built with LLVM like the sm6225-mainline pmaports package
 KMAKE="make -C $SRC O=$KOUT ARCH=arm64 LLVM=1"
 

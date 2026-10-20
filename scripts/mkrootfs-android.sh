@@ -57,7 +57,8 @@ cp -R "$FILES"/. "$M"/
 chmod 755 "$M"/etc/local.d/*.start "$M"/etc/init.d/tapas-*
 
 # Stock firmware from this phone's vendor partitions: GPU, modem (with the
-# Wi-Fi firmware it runs and its carrier configs), IPA, Bluetooth, and the
+# Wi-Fi firmware it runs and its carrier configs), IPA, ADSP and the speaker
+# amplifier's profiles, Bluetooth, and the
 # Wi-Fi board files as an ath10k board-2.bin. firmware-5.bin (ath10k
 # features) is the linux-firmware one for this Wi-Fi generation.
 FW=$M/lib/firmware
@@ -66,7 +67,8 @@ A=$FW/ath10k/WCN3990/hw1.0/xiaomi-tapas
 mkdir -p "$D" "$FW/qca" "$A"
 cp /vendor/firmware/a630_sqe.fw /vendor/firmware/a610_zap.* "$FW/qcom/"
 cp /vendor/firmware_mnt/image/modem.* /vendor/firmware_mnt/image/wlanmdsp.mbn \
-	/vendor/firmware/ipa_fws.* "$D/"
+	/vendor/firmware_mnt/image/adsp.* /vendor/firmware/ipa_fws.* "$D/"
+cp /vendor/firmware/aw87xxx_acf.bin "$FW/"
 cp -R /vendor/firmware_mnt/image/modem_pr "$D/"
 cp /vendor/bt_firmware/image/cmbtfw1[23].tlv /vendor/bt_firmware/image/cmnv1[23]*.bin "$FW/qca/"
 ${PYTHON:-python3} "$(dirname "$0")/ath10k-bd.py" /vendor/firmware_mnt/image "$A/board-2.bin"

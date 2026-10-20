@@ -1,0 +1,449 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * sm6225-xiaomi-tapas with audio: the ADSP (q6 APR services), the LPASS
+ * RX/TX/VA macros, the WCD9370 codec on SoundWire and the aw87xxx speaker
+ * amplifier, as on the sm6225-mainline spes board (same codec and LPASS
+ * pins), with the tapas amplifier and mic bias from the stock device tree.
+ * Kept apart until it is known to come up without hanging the boot.
+ */
+#include <dt-bindings/sound/qcom,q6afe.h>
+#include <dt-bindings/sound/qcom,q6asm.h>
+#include "sm6225-xiaomi-tapas.dts"
+
+/ {
+	model = "Xiaomi Redmi Note 12 4G (audio)";
+
+	sound {
+		compatible = "qcom,qrb4210-rb2-sndcard";
+		model = "SM6225-Tapas";
+		audio-routing =
+				"AMIC1", "MIC BIAS1",
+				"AMIC2", "MIC BIAS2",
+				"AMIC3", "MIC BIAS3",
+
+				"IN1_HPHL", "HPHL_OUT",
+				"IN2_HPHR", "HPHR_OUT",
+				"IN3_AUX", "AUX_OUT",
+
+				"VA DMIC0", "VA MIC BIAS1",
+				"VA DMIC1", "VA MIC BIAS1",
+				"VA DMIC2", "VA MIC BIAS3",
+				"VA DMIC3", "VA MIC BIAS3",
+
+				"VA SWR_MIC0", "ADC1_OUTPUT",
+				"VA SWR_MIC4", "ADC2_OUTPUT",
+				"VA SWR_MIC5", "ADC3_OUTPUT",
+
+				"TX SWR_INPUT0", "ADC1_OUTPUT",
+				"TX SWR_INPUT4", "ADC2_OUTPUT",
+
+				"Speaker IN", "AUX";
+
+		aux-devs = <&speaker_amp>;
+
+		mm1-dai-link {
+			link-name = "MultiMedia1";
+
+			cpu {
+				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA1>;
+			};
+		};
+
+		mm2-dai-link {
+			link-name = "MultiMedia2";
+
+			cpu {
+				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA2>;
+			};
+		};
+
+		mm3-dai-link {
+			link-name = "MultiMedia3";
+
+			cpu {
+				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA3>;
+			};
+		};
+
+		wcd-playback-dai-link {
+			link-name = "WCD Playback";
+
+			cpu {
+				sound-dai = <&q6afedai RX_CODEC_DMA_RX_0>;
+			};
+
+			platform {
+				sound-dai = <&q6routing>;
+			};
+
+			codec {
+				sound-dai = <&wcd937x 0>,
+				<&swr1 0>,
+				<&rxmacro 0>;
+			};
+		};
+
+
+		wcd-capture-dai-link {
+			link-name = "WCD Capture";
+
+			cpu {
+				sound-dai = <&q6afedai TX_CODEC_DMA_TX_3>;
+			};
+
+			platform {
+				sound-dai = <&q6routing>;
+			};
+
+			codec {
+				sound-dai = <&wcd937x 1>,
+				<&swr0 0>,
+				<&txmacro 0>;
+			};
+		};
+
+		va-dai-link {
+			link-name = "VA Capture";
+
+			cpu {
+				sound-dai = <&q6afedai VA_CODEC_DMA_TX_0>;
+			};
+
+			platform {
+				sound-dai = <&q6routing>;
+			};
+
+			codec {
+				sound-dai = <&vamacro 0>;
+			};
+		};
+	};
+};
+
+&soc {
+	rxmacro: codec@a600000 {
+		compatible = "qcom,sm6115-lpass-rx-macro";
+		reg = <0x0 0x0a600000 0x0 0x1000>;
+		#clock-cells = <0>;
+		#sound-dai-cells = <1>;
+		clocks = <&q6afecc LPASS_CLK_ID_RX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6afecc LPASS_CLK_ID_RX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&vamacro>;
+		clock-names = "mclk", "npl", "dcodec", "fsgen";
+		clock-output-names = "mclk";
+		status = "okay";
+	};
+
+	txmacro: codec@a620000 {
+		compatible = "qcom,sm6115-lpass-tx-macro";
+		reg = <0x0 0x0a620000 0x0 0x1000>;
+		qcom,dmic-sample-rate = <600000>;
+		#clock-cells = <0>;
+		#sound-dai-cells = <1>;
+		pinctrl-0 = <&lpi_dmic01_active &lpi_dmic23_active>;
+		pinctrl-names = "default";
+		clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6afecc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&vamacro>;
+		clock-names = "mclk", "npl", "dcodec", "fsgen";
+		clock-output-names = "mclk";
+		status = "okay";
+	};
+
+	vamacro: codec@a730000 {
+		compatible = "qcom,sm6115-lpass-va-macro";
+		reg = <0x0 0x0a730000 0x0 0x1000>;
+		qcom,dmic-sample-rate = <600000>;
+		#clock-cells = <0>;
+		#sound-dai-cells = <1>;
+		clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6afecc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
+		clock-names = "mclk", "dcodec", "npl";
+		clock-output-names = "fsgen";
+		status = "okay";
+	};
+
+	lpass_audiocc: clock-controller@a6a9000 {
+		compatible = "qcom,sm6115-lpassaudiocc";
+		reg = <0x0 0x0a6a9000 0x0 0x1000>;
+		#reset-cells = <1>;
+
+		status = "okay";
+	};
+
+	lpasscc: clock-controller@a7ec000 {
+		compatible = "qcom,sm6115-lpasscc";
+		reg = <0x0 0x0a7ec000 0x0 0x1000>;
+		#reset-cells = <1>;
+
+		status = "okay";
+	};
+
+	wcd937x: codec {
+		compatible = "qcom,wcd9370-codec";
+		pinctrl-names = "default";
+		pinctrl-0 = <&wcd_reset_n>;
+		reset-gpios = <&tlmm 92 GPIO_ACTIVE_LOW>;
+		vdd-buck-supply = <&pm6125_l14>;
+		vdd-rxtx-supply = <&pm6125_l9>;
+		vdd-px-supply = <&pm6125_l9>;
+		qcom,micbias1-microvolt = <2700000>;
+		qcom,micbias2-microvolt = <2700000>;
+		qcom,micbias3-microvolt = <2700000>;
+		qcom,rx-device = <&wcd937x_rx>;
+		qcom,tx-device = <&wcd937x_tx>;
+		#sound-dai-cells = <1>;
+	};
+
+	swr0: soundwire@a740000 {
+		compatible = "qcom,soundwire-v1.6.0";
+		reg = <0x0 0x0a740000 0x0 0x2000>;
+		interrupts = <GIC_SPI 296 IRQ_TYPE_LEVEL_HIGH>,
+		<GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
+
+		pinctrl-0 = <&lpi_swr_tx_active>;
+		pinctrl-names = "default";
+
+		clocks = <&txmacro>;
+		clock-names = "iface";
+
+		resets = <&lpasscc 0>;
+		reset-names = "swr_audio_cgcr";
+
+		label = "VA_TX";
+
+		qcom,din-ports = <3>;
+		qcom,dout-ports = <0>;
+
+		qcom,ports-sinterval-low =
+		/bits/ 8 <0x03 0x03 0x03>;
+		qcom,ports-offset1 =
+		/bits/ 8 <0x01 0x02 0x01>;
+		qcom,ports-offset2 =
+		/bits/ 8 <0x00 0x00 0x00>;
+		qcom,ports-hstart =
+		/bits/ 8 <0xff 0xff 0xff>;
+		qcom,ports-hstop =
+		/bits/ 8 <0xff 0xff 0xff>;
+		qcom,ports-word-length =
+		/bits/ 8 <0xff 0xff 0xff>;
+		qcom,ports-block-pack-mode =
+		/bits/ 8 <0xff 0xff 0xff>;
+		qcom,ports-block-group-count =
+		/bits/ 8 <0xff 0xff 0xff>;
+		qcom,ports-lane-control =
+		/bits/ 8 <0x00 0x00 0x00>;
+
+		#sound-dai-cells = <1>;
+		#address-cells = <2>;
+		#size-cells = <0>;
+
+		wcd937x_tx: codec@0,3 {
+			compatible = "sdw20217010a00";
+			reg = <0 3>;
+
+			/*
+			 * WCD9370 TX Port 1 (ADC1)               <=> SWR Port 1
+			 * WCD9370 TX Port 2 (ADC2, 3)            <=> SWR Port 1
+			 * WCD9370 TX Port 3 (DMIC0,1,2,3 & MBHC) <=> SWR Port 2
+			 * WCD9370 TX Port 4 (DMIC4,5,6,7)        <=> SWR Port 3
+			 */
+			qcom,tx-port-mapping = <1 1 2 3>;
+
+			/*
+			 * Static channel mapping between slave and master tx
+			 * port channels, in the order of slave port channels
+			 * which is adc1, adc2, adc3, mic0, dmic1, mbhc,
+			 * dmic2, dmic3, dmic4, dmic5, dmic6, dmic7.
+			 */
+			qcom,tx-channel-mapping = /bits/ 8
+			<1 2 1 1 2 3 3 4 1 2 3 4>;
+		};
+	};
+
+	swr1: soundwire@a610000 {
+		compatible = "qcom,soundwire-v1.6.0";
+		reg = <0x0 0x0a610000 0x0 0x2000>;
+		interrupts = <GIC_SPI 297 IRQ_TYPE_LEVEL_HIGH>;
+
+		pinctrl-0 = <&lpi_swr_rx_active>;
+		pinctrl-names = "default";
+
+		clocks = <&rxmacro>;
+		clock-names = "iface";
+
+		resets = <&lpass_audiocc 0>;
+		reset-names = "swr_audio_cgcr";
+
+		label = "RX";
+
+		qcom,din-ports = <0>;
+		qcom,dout-ports = <5>;
+
+		qcom,ports-sinterval-low =
+		/bits/ 8 <0x03 0x1f 0x1f 0x07 0x00>;
+		qcom,ports-offset1 =
+		/bits/ 8 <0x00 0x00 0x0b 0x01 0x00>;
+		qcom,ports-offset2 =
+		/bits/ 8 <0x00 0x00 0x0b 0x00 0x00>;
+		qcom,ports-hstart =
+		/bits/ 8 <0xff 0x03 0xff 0xff 0xff>;
+		qcom,ports-hstop =
+		/bits/ 8 <0xff 0x06 0xff 0xff 0xff>;
+		qcom,ports-word-length =
+		/bits/ 8 <0x01 0x07 0x04 0xff 0xff>;
+		qcom,ports-block-pack-mode =
+		/bits/ 8 <0xff 0x00 0x01 0xff 0xff>;
+		qcom,ports-block-group-count =
+		/bits/ 8 <0xff 0xff 0xff 0xff 0x00>;
+		qcom,ports-lane-control =
+		/bits/ 8 <0x01 0x00 0x00 0x00 0x00>;
+
+		#sound-dai-cells = <1>;
+		#address-cells = <2>;
+		#size-cells = <0>;
+
+		wcd937x_rx: codec@0,4 {
+			compatible = "sdw20217010a00";
+			reg = <0 4>;
+			qcom,rx-port-mapping = <1 2 3 4 5>;
+			qcom,rx-channel-mapping = /bits/ 8
+			<1 2 1 1 2 1 1 2>;
+		};
+	};
+};
+
+&lpass_tlmm {
+	lpi_swr_tx_active: lpi-swr-tx-active-state {
+		clk-pins {
+			pins = "gpio0";
+			function = "swr_tx_clk";
+			bias-disable;
+			drive-strength = <10>;
+			slew-rate = <3>;
+		};
+
+		data-pins {
+			pins = "gpio1", "gpio2";
+			function = "swr_tx_data";
+			bias-bus-hold;
+			drive-strength = <10>;
+			slew-rate = <3>;
+		};
+	};
+
+	lpi_swr_tx_sleep: lpi-swr-tx-sleep-state {
+		clk-pins {
+			pins = "gpio0";
+			function = "swr_tx_clk";
+			bias-pull-down;
+			drive-strength = <10>;
+			input-enable;
+		};
+
+		data-pins {
+			pins = "gpio1", "gpio2";
+			function = "swr_tx_data";
+			bias-bus-hold;
+			drive-strength = <10>;
+			input-enable;
+		};
+	};
+
+	lpi_swr_rx_active: lpi-swr-rx-active-state {
+		clk-pins {
+			pins = "gpio3";
+			function = "swr_rx_clk";
+			bias-disable;
+			drive-strength = <10>;
+			slew-rate = <3>;
+		};
+
+		data-pins {
+			pins = "gpio4", "gpio5";
+			function = "swr_rx_data";
+			bias-bus-hold;
+			drive-strength = <10>;
+			slew-rate = <3>;
+		};
+	};
+
+	lpi_swr_rx_sleep: lpi-swr-rx-sleep-state {
+		clk-pins {
+			pins = "gpio3";
+			function = "swr_rx_clk";
+			bias-pull-down;
+			drive-strength = <10>;
+			input-enable;
+		};
+
+		data-pins {
+			pins = "gpio4", "gpio5";
+			function = "swr_rx_data";
+			bias-bus-hold;
+			drive-strength = <10>;
+			input-enable;
+		};
+	};
+
+	lpi_dmic01_active: lpi-dmic01-active-state {
+		clk-pins {
+			pins = "gpio6";
+			function = "dmic01_clk";
+			drive-strength = <8>;
+			output-high;
+		};
+
+		data-pins {
+			pins = "gpio7";
+			function = "dmic01_data";
+			drive-strength = <8>;
+			input-enable;
+		};
+	};
+
+	lpi_dmic23_active: lpi-dmic23-active-state {
+		clk-pins {
+			pins = "gpio8";
+			function = "dmic23_clk";
+			drive-strength = <8>;
+			output-high;
+		};
+
+		data-pins {
+			pins = "gpio9";
+			function = "dmic23_data";
+			drive-strength = <8>;
+			input-enable;
+		};
+	};
+};
+
+&remoteproc_adsp {
+	firmware-name = "qcom/sm6225/xiaomi/tapas/adsp.mdt";
+	status = "okay";
+};
+
+&i2c1 {
+	/* Stock aw87xxx_pa_59; its profiles come from aw87xxx_acf.bin */
+	speaker_amp: audio-amplifier@59 {
+		compatible = "awinic,aw87xxx_pa";
+		reg = <0x59>;
+		dev_index = <0>;
+		reset-gpio = <&tlmm 106 GPIO_ACTIVE_HIGH>;
+		sound-name-prefix = "Speaker";
+		#sound-dai-cells = <0>;
+	};
+};
+
+&tlmm {
+	wcd_reset_n: wcd-reset-n-active-state {
+		pins = "gpio92";
+		function = "gpio";
+		drive-strength = <16>;
+		output-high;
+	};
+};

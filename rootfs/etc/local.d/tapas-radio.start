@@ -16,8 +16,10 @@ snap() {
 	echo "== mmcli"; timeout 20 mmcli -L; timeout 20 mmcli -m any
 	echo "== nmcli"; timeout 10 nmcli dev
 	echo "== bluetooth"; timeout 10 btmgmt info; cat /var/log/tapas-bdaddr.log
+	echo "== display"; ls /sys/class/drm /sys/class/backlight 2>&1; cat /sys/class/drm/*/modes 2>/dev/null
+	echo "== audio"; cat /proc/asound/cards; aplay -l 2>&1
 	echo "== dmesg"
-	dmesg | grep -E -i 'remoteproc|mpss|modem|rmtfs|qrtr|qmi|ipa|ath10k|wlan|bluetooth|hci|qca|serial|bq2589|sm5602|nopmi|power_supply|4a84000|4a8c000|firmware'
+	dmesg | grep -E -i 'remoteproc|mpss|modem|rmtfs|qrtr|qmi|ipa|ath10k|wlan|bluetooth|hci|qca|serial|bq2589|sm5602|nopmi|power_supply|4a84000|4a8c000|firmware|vibra|msm_dpu|dsi|panel|drm|apr|q6|adsp|wcd|swr|soundwire|aw87|snd|asoc'
 	echo "== logread"; logread 2>&1 | grep -E -i 'rmtfs|tqftp|uim|modem|bluetooth|wpa|NetworkManager' | tail -n 150
 }
 (
@@ -28,5 +30,13 @@ snap() {
 	sync
 	sleep 120
 	snap >>$L 2>&1
+	sync
+	# A short tone on the speaker through the UCM profile, if there is a card
+	if [ -e /proc/asound/card0 ]; then
+		echo "===== speaker test"
+		alsaucm -c 0 set _verb HiFi set _enadev Speaker
+		timeout 6 speaker-test -D hw:0,0 -c 2 -r 48000 -t sine -f 440 -l 1
+		amixer -c 0 contents | head -n 400
+	fi >>$L 2>&1
 	sync
 ) &
