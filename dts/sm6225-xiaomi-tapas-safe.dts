@@ -21,3 +21,23 @@
 &sdhc_2 {
 	status = "disabled";
 };
+
+&i2c1 {
+	status = "disabled";
+};
+
+&remoteproc_mpss {
+	status = "disabled";
+};
+
+&ipa {
+	status = "disabled";
+};
+
+&wifi {
+	status = "disabled";
+};
+
+&uart3 {
+	status = "disabled";
+};
