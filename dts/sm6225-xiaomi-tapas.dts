@@ -295,6 +295,11 @@
 	no-mmc;
 	/* Stock qcom,dll-hsr-list */
 	qcom,ddr-config = <0x80040868>;
+	/*
+	 * SDR104 tuning always fails (-5) on mainline, while Android runs the
+	 * same card at SDR104. Stay at 3.3 V high speed, which needs no tuning.
+	 */
+	no-1-8-v;
 
 	broken-cd;
 	status = "okay";
