@@ -107,6 +107,14 @@
 
 /* Touchscreen: FocalTech FT5452 (chip id 0x5452), pins as in stock */
 &i2c2 {
+	/*
+	 * geni_i2c rejects the SE core clock unless it is exactly 19.2 or
+	 * 32 MHz ("Unsupported SE source clock", -EINVAL): GCC_QUPV3_WRAP0_S2_CLK
+	 * has no default rate here, so the i2c2 bus never probes and the
+	 * touchscreen is dead. Pin the RCG to XO 19.2 MHz.
+	 */
+	assigned-clocks = <&gcc GCC_QUPV3_WRAP0_S2_CLK>;
+	assigned-clock-rates = <19200000>;
 	status = "okay";
 
 	touchscreen@38 {
@@ -383,5 +391,23 @@
 	vdd-supply = <&pm6125_l4>;
 	vdda-pll-supply = <&pm6125_l12>;
 	vdda-phy-dpdm-supply = <&pm6125_l15>;
+	status = "okay";
+};
+
+/*
+ * GPU: Adreno 610 (a610, chipid 0x06010001). No real GMU -> the mainline
+ * "gmu-wrapper"; gpucc (qcom,sm6225-gpucc) and gmu_wrapper are already okay
+ * in sm6225.dtsi, only the gpu and its SMMU are disabled. drm/msm (DRM_MSM=y)
+ * and CONFIG_SM_GPUCC_6225=y are in the base config. The zap region
+ * pil_gpu_mem (0x56615000, no-map) is reserved in sm6225.dtsi.
+ *
+ * Firmware (put in the rootfs /lib/firmware/qcom/, pulled from the stock
+ * /vendor/firmware): a630_sqe.fw and the split zap a610_zap.mdt + .b00..b02.
+ */
+&adreno_smmu {
+	status = "okay";
+};
+
+&gpu {
 	status = "okay";
 };
