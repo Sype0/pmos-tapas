@@ -1,0 +1,3 @@
+# Autologin has no password to open the wallet with, so it would ask for one
+[Wallet]
+Enabled=false

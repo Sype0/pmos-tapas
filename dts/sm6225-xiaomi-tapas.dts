@@ -368,8 +368,11 @@
 		focaltech,irq-gpio = <&tlmm 80 GPIO_ACTIVE_LOW>;
 		focaltech,reset-gpio = <&tlmm 86 GPIO_ACTIVE_LOW>;
 		focaltech,avdd-gpio = <&tlmm 36 GPIO_ACTIVE_HIGH>;
-		/* the firmware reports 10x the panel resolution */
-		focaltech,display-coords = <0 0 10799 23999>;
+		/*
+		 * The firmware reports 10x the panel resolution, but the driver
+		 * reads only the top 12 bits of it: 1/8 of 10799x23999.
+		 */
+		focaltech,display-coords = <0 0 1349 2999>;
 		focaltech,max-touch-number = <10>;
 		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
 		pinctrl-0 = <&ts_int_active &ts_reset_active>;

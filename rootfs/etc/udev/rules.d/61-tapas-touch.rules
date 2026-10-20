@@ -1,3 +1,8 @@
 # fts_ts registers gesture-wakeup letter keys (W, E, O, S...), so input_id tags
-# the touchscreen as a keyboard and Phosh hides the on-screen keyboard.
+# the touchscreen as a keyboard and the on-screen keyboard stays hidden.
 ACTION=="add|change", SUBSYSTEM=="input", ATTRS{name}=="fts_ts", ENV{ID_INPUT_KEYBOARD}="", ENV{ID_INPUT_KEY}=""
+# The firmware works at 10x the panel resolution (10799x23999), but the driver
+# reads only the top 12 bits of it, i.e. 1/8: 0..1349 x 0..2999. Kernels
+# built before the dts fix announce 10799x23999 and squeeze every touch into
+# the top left corner.
+ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="fts_ts", ENV{EVDEV_ABS_35}="0:1349", ENV{EVDEV_ABS_36}="0:2999", RUN{builtin}+="keyboard"

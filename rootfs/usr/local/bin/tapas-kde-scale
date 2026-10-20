@@ -1,0 +1,4 @@
+#!/bin/sh
+# simpledrm has no physical size for the panel (it reports 96 dpi), so KWin
+# starts at scale 1. Set 3; KWin keeps it in ~/.config/kwinoutputconfig.json.
+kscreen-doctor output.Unknown-1.scale.3 || kscreen-doctor output.1.scale.3

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=tapas display scale
+Exec=/usr/local/bin/tapas-kde-scale
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=1

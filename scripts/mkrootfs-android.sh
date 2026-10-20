@@ -45,15 +45,19 @@ $C /sbin/apk update
 $C /sbin/apk add alpine-base openrc busybox-extras busybox-openrc openssh \
 	e2fsprogs util-linux dosfstools doas nano htop pciutils usbutils \
 	kmod tzdata iw bash
-# Phosh, drawn with llvmpipe on the bootloader's framebuffer (simpledrm)
-$C /sbin/apk add postmarketos-ui-phosh postmarketos-ui-phosh-openrc mesa-dri-gallium
+# Plasma Mobile on the bootloader's framebuffer (simpledrm), rendered by the
+# Adreno (freedreno); greetd logs straight into it
+$C /sbin/apk add postmarketos-ui-plasma-mobile mesa-dri-gallium \
+	greetd greetd-openrc qmlkonsole
 # Modem (rmtfs, tqftpserv, UIM slot selection; pd-mapper is in the kernel)
 # and Bluetooth tools
 $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
 	rmtfs-udev tqftpserv tqftpserv-openrc qrtr bluez-btmgmt bluez-btmon
 
-# Board files: gadget network, services, fstab, inittab, Phosh tweaks
+# Board files: gadget network, services, fstab, inittab, Plasma settings.
+# The checkout's modes depend on its umask: make everything readable.
 cp -R "$FILES"/. "$M"/
+(cd "$FILES" && find . -mindepth 1) | while read -r p; do chmod go+rX "$M/$p"; done
 chmod 755 "$M"/etc/local.d/*.start "$M"/etc/init.d/tapas-*
 
 # Stock firmware from this phone's vendor partitions: GPU, modem (with the
@@ -96,12 +100,11 @@ sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
 for s in hwclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
 for s in local sshd crond rmtfs tqftpserv msm-modem-uim-selection; do rc-update add $s default; done
-# Autologin into Phosh (rootfs/etc/greetd/config.toml); phrog, with the
-# on-screen keyboard (its autostart dir is empty), stays as the fallback
+# Autologin into Plasma Mobile with greetd (rootfs/etc/greetd/config.toml)
+# instead of the tinydm that postmarketos-ui-plasma-mobile-openrc enables
 sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/greetd/config.toml\"|" /etc/conf.d/greetd
-mkdir -p /etc/phrog/autostart
-ln -sf /usr/share/applications/sm.puri.OSK0.desktop /etc/phrog/autostart/
-glib-compile-schemas /usr/share/glib-2.0/schemas
+rc-update del tinydm default || true
+rc-update add greetd default
 for s in mount-ro killprocs savecache; do rc-update add $s shutdown; done
 # No swap file inside a loop image on FAT
 rc-update del swapfile default || true

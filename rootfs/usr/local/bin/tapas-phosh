@@ -1,5 +1,0 @@
-#!/bin/bash
-# Phosh for greetd's autologin. greetd swallows the session's output, so
-# send it to syslog like phrog-greetd-session does.
-exec > >(/usr/bin/logger -t phosh-session) 2>&1
-exec /usr/bin/phosh-session
