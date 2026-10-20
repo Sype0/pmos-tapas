@@ -48,7 +48,7 @@ $C /sbin/apk add alpine-base openrc busybox-extras busybox-openrc openssh \
 
 # Board files: gadget network, services, fstab, inittab
 cp -R "$FILES"/. "$M"/
-chmod 755 "$M/etc/local.d/tapas-usb.start"
+chmod 755 "$M/etc/local.d/tapas-usb.start" "$M/etc/init.d/tapas-klog"
 
 echo tapas >"$M/etc/hostname"
 printf '127.0.0.1\tlocalhost tapas\n::1\t\tlocalhost tapas\n' >"$M/etc/hosts"
@@ -59,8 +59,9 @@ adduser -D -s /bin/bash -G wheel user
 echo "user:147147" | chpasswd
 echo "root:147147" | chpasswd
 echo "permit persist :wheel" >/etc/doas.d/wheel.conf
+sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 # postmarketos-base comes in for alpine-base and brings udev
-for s in devfs dmesg; do rc-update add $s sysinit; done
+for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
 for s in hwclock modules sysctl hostname bootmisc syslog; do rc-update add $s boot; done
 for s in local sshd crond; do rc-update add $s default; done
 for s in mount-ro killprocs savecache; do rc-update add $s shutdown; done

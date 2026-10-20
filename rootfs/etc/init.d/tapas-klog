@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+# Bring-up: keep the kernel log and the USB device state on disk, synced
+# every 2 s, so a failed boot can be read back from Android. The previous
+# boot's files are kept as *.prev.
+
+description="Save the kernel log and USB state to /var/log"
+
+depend() {
+	after dmesg
+}
+
+start() {
+	ebegin "Saving kernel log to /var/log/kmsg.log"
+	cd /var/log || return 1
+	for f in kmsg.log usb-state.log; do
+		[ -f $f ] && mv -f $f $f.prev
+	done
+	(
+		last=
+		while :; do
+			dmesg >kmsg.log.tmp && mv -f kmsg.log.tmp kmsg.log
+			s=$(cat /sys/class/udc/*/state 2>/dev/null)
+			if [ "$s" != "$last" ]; then
+				echo "$(cut -d' ' -f1 /proc/uptime) $s" >>usb-state.log
+				last=$s
+			fi
+			sync
+			sleep 2
+		done
+	) </dev/null >/dev/null 2>&1 &
+	eend 0
+}
