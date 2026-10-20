@@ -136,7 +136,8 @@
 		reg = <0x38>;
 		interrupt-parent = <&tlmm>;
 		interrupts = <80 IRQ_TYPE_EDGE_FALLING>;
-		focaltech,irq-gpio = <&tlmm 80 IRQ_TYPE_EDGE_FALLING>;
+		/* the driver picks a falling edge only when this gpio is active-low */
+		focaltech,irq-gpio = <&tlmm 80 GPIO_ACTIVE_LOW>;
 		focaltech,reset-gpio = <&tlmm 86 GPIO_ACTIVE_LOW>;
 		focaltech,avdd-gpio = <&tlmm 36 GPIO_ACTIVE_HIGH>;
 		/* the firmware reports 10x the panel resolution */
