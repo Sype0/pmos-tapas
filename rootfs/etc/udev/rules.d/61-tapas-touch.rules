@@ -1,0 +1,3 @@
+# fts_ts registers gesture-wakeup letter keys (W, E, O, S...), so input_id tags
+# the touchscreen as a keyboard and Phosh hides the on-screen keyboard.
+ACTION=="add|change", SUBSYSTEM=="input", ATTRS{name}=="fts_ts", ENV{ID_INPUT_KEYBOARD}="", ENV{ID_INPUT_KEY}=""

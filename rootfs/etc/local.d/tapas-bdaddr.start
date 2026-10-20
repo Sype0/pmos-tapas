@@ -1,0 +1,13 @@
+#!/bin/sh
+# The WCN3950 comes up with the NVM's default address, so hci_qca wants the
+# bootloader's local-bd-address, which our DTB never gets: the controller
+# stays unconfigured. Give it the phone's address from /etc/tapas/bdaddr
+# (stock persist.vendor.service.bdroid.btmac, kept out of the repo).
+(
+	A=$(cat /etc/tapas/bdaddr 2>/dev/null) || exit 0
+	for i in $(seq 60); do
+		[ -e /sys/class/bluetooth/hci0 ] && break
+		sleep 1
+	done
+	btmgmt --index 0 public-addr "$A"
+) >/var/log/tapas-bdaddr.log 2>&1 &

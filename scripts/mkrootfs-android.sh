@@ -47,10 +47,37 @@ $C /sbin/apk add alpine-base openrc busybox-extras busybox-openrc openssh \
 	kmod tzdata iw bash
 # Phosh, drawn with llvmpipe on the bootloader's framebuffer (simpledrm)
 $C /sbin/apk add postmarketos-ui-phosh postmarketos-ui-phosh-openrc mesa-dri-gallium
+# Modem (rmtfs, tqftpserv, UIM slot selection; pd-mapper is in the kernel)
+# and Bluetooth tools
+$C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
+	rmtfs-udev tqftpserv tqftpserv-openrc qrtr bluez-btmgmt bluez-btmon
 
-# Board files: gadget network, services, fstab, inittab
+# Board files: gadget network, services, fstab, inittab, Phosh tweaks
 cp -R "$FILES"/. "$M"/
-chmod 755 "$M/etc/local.d/tapas-usb.start" "$M/etc/init.d/tapas-klog"
+chmod 755 "$M"/etc/local.d/*.start "$M/etc/init.d/tapas-klog"
+
+# Stock firmware from this phone's vendor partitions: GPU, modem (with the
+# Wi-Fi firmware it runs and its carrier configs), IPA, Bluetooth, and the
+# Wi-Fi board files as an ath10k board-2.bin. firmware-5.bin (ath10k
+# features) is the linux-firmware one for this Wi-Fi generation.
+FW=$M/lib/firmware
+D=$FW/qcom/sm6225/xiaomi/tapas
+A=$FW/ath10k/WCN3990/hw1.0/xiaomi-tapas
+mkdir -p "$D" "$FW/qca" "$A"
+cp /vendor/firmware/a630_sqe.fw /vendor/firmware/a610_zap.* "$FW/qcom/"
+cp /vendor/firmware_mnt/image/modem.* /vendor/firmware_mnt/image/wlanmdsp.mbn \
+	/vendor/firmware/ipa_fws.* "$D/"
+cp -R /vendor/firmware_mnt/image/modem_pr "$D/"
+cp /vendor/bt_firmware/image/cmbtfw1[23].tlv /vendor/bt_firmware/image/cmnv1[23]*.bin "$FW/qca/"
+${PYTHON:-python3} "$(dirname "$0")/ath10k-bd.py" /vendor/firmware_mnt/image "$A/board-2.bin"
+cp /vendor/firmware_mnt/image/bdwlan.bin "$A/board.bin"
+$C /usr/bin/wget -q -O /lib/firmware/ath10k/WCN3990/hw1.0/xiaomi-tapas/firmware-5.bin \
+	https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath10k/WCN3990/hw1.0/qcm2290/firmware-5.bin
+chown -R 0:0 "$FW"
+chmod -R u=rwX,go=rX "$FW"
+# Bluetooth address for tapas-bdaddr.start
+mkdir -p "$M/etc/tapas"
+settings get secure bluetooth_address >"$M/etc/tapas/bdaddr"
 
 echo tapas >"$M/etc/hostname"
 printf '127.0.0.1\tlocalhost tapas\n::1\t\tlocalhost tapas\n' >"$M/etc/hosts"
@@ -66,7 +93,12 @@ sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 # postmarketos-base comes in for alpine-base and brings udev
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
 for s in hwclock modules sysctl hostname bootmisc syslog; do rc-update add $s boot; done
-for s in local sshd crond; do rc-update add $s default; done
+for s in local sshd crond rmtfs tqftpserv msm-modem-uim-selection; do rc-update add $s default; done
+# Greeter: phrog, with the on-screen keyboard (its autostart dir is empty)
+sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/phrog/greetd-config.toml\"|" /etc/conf.d/greetd
+mkdir -p /etc/phrog/autostart
+ln -sf /usr/share/applications/sm.puri.OSK0.desktop /etc/phrog/autostart/
+glib-compile-schemas /usr/share/glib-2.0/schemas
 for s in mount-ro killprocs savecache; do rc-update add $s shutdown; done
 # No swap file inside a loop image on FAT
 rc-update del swapfile default || true

@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths-ignore:
       - README.md
+      # the SD card root filesystem is built on the phone
+      - rootfs/**
+      - scripts/mkrootfs-android.sh
+      - scripts/ath10k-bd.py
 
 jobs:
   build:

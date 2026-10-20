@@ -1,0 +1,3 @@
+# tapas: the only "keyboards" are the power/volume keys and the touch gesture keys
+[mobi.phosh.osk]
+ignore-hw-keyboards=true

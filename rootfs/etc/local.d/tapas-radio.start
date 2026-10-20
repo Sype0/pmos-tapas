@@ -1,0 +1,32 @@
+#!/bin/sh
+# Battery/modem/Wi-Fi/Bluetooth bring-up: snapshots at 60 s and 180 s after
+# boot into /var/log/tapas-radio.log (the modem takes a while to come up).
+snap() {
+	echo "===== t=$(cut -d' ' -f1 /proc/uptime)"
+	echo "== remoteproc"
+	for r in /sys/class/remoteproc/*; do
+		echo "$r: $(cat $r/name) $(cat $r/state) $(cat $r/firmware)"
+	done
+	echo "== services"; rc-status default | grep -E 'rmtfs|tqftp|uim|modemmanager|bluetooth|networkmanager'
+	echo "== power_supply"
+	for p in /sys/class/power_supply/*; do echo "-- $p"; cat $p/uevent; done
+	echo "== net"; ip -br link; iw dev
+	echo "== rfkill"; cat /sys/class/rfkill/*/name /sys/class/rfkill/*/soft /sys/class/rfkill/*/hard 2>&1
+	echo "== qrtr"; timeout 10 qrtr-lookup
+	echo "== mmcli"; timeout 20 mmcli -L; timeout 20 mmcli -m any
+	echo "== nmcli"; timeout 10 nmcli dev
+	echo "== bluetooth"; timeout 10 btmgmt info; cat /var/log/tapas-bdaddr.log
+	echo "== dmesg"
+	dmesg | grep -E -i 'remoteproc|mpss|modem|rmtfs|qrtr|qmi|ipa|ath10k|wlan|bluetooth|hci|qca|serial|bq2589|sm5602|nopmi|power_supply|4a84000|4a8c000|firmware'
+	echo "== logread"; logread 2>&1 | grep -E -i 'rmtfs|tqftp|uim|modem|bluetooth|wpa|NetworkManager' | tail -n 150
+}
+(
+	sleep 60
+	L=/var/log/tapas-radio.log
+	[ -f $L ] && mv $L $L.prev
+	snap >$L 2>&1
+	sync
+	sleep 120
+	snap >>$L 2>&1
+	sync
+) &

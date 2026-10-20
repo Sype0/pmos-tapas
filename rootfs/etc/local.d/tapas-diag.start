@@ -14,11 +14,19 @@
 	grep -E 'clock|xo|gpll|qupv3_wrap0|gpu|gx' /sys/kernel/debug/clk/clk_summary
 	echo "== clk orphans"; cat /sys/kernel/debug/clk/clk_orphan_summary
 	echo "== deferred"; cat /sys/kernel/debug/devices_deferred
-	echo "== i2c rebind"
-	echo 4a88000.i2c > /sys/bus/platform/drivers/geni_i2c/bind; echo "rc=$?"
-	ls /sys/bus/i2c/devices
+	echo "== i2c devices"; ls /sys/bus/i2c/devices
 	echo "== input"; cat /proc/bus/input/devices
 	echo "== dmesg (msm/adreno/drm/i2c/fts/firmware)"
 	dmesg | grep -E -i 'msm|adreno|drm|a6xx|zap|i2c|fts|focal|firmware'
+	echo "== touch irq (t=30s)"; grep -E 'fts|msmgpio|tlmm' /proc/interrupts
+	echo "== gpio 36/80/86"; grep -E 'gpio(36|80|86)[^0-9]' /sys/kernel/debug/gpio
 	sync
+	# touch the screen during the next 60 s
+	E=$(grep -l fts_ts /sys/class/input/event*/device/name | head -1 | cut -d/ -f5)
+	echo "== raw bytes from /dev/input/$E in 60 s"
+	timeout 60 cat /dev/input/$E >/var/log/touch-raw.bin; wc -c </var/log/touch-raw.bin
+	echo "== touch irq (t=90s)"; grep -E 'fts|msmgpio|tlmm' /proc/interrupts
+	sync
+	# greeter/phosh output goes to syslog (RAM only): copy it out for 10 min
+	for i in $(seq 30); do logread >/var/log/syslog-copy.log 2>&1; sync; sleep 20; done
 ) &
