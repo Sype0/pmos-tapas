@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * sm6225-xiaomi-tapas with the real display pipeline (DPU + DSI + panel)
+ * instead of the bootloader's framebuffer: 120 Hz, brightness control,
+ * panel power off, and the GPU in the same DRM device as the display.
+ * Kept apart until it is known to light the panel up.
+ */
+#include "sm6225-xiaomi-tapas.dts"
+
+/ {
+	model = "Xiaomi Redmi Note 12 4G (display)";
+
+	chosen {
+		/* CONFIG_CMDLINE without msm.separate_gpu_kms=1 */
+		bootargs = "console=tty0 consoleblank=0 loglevel=7 printk.devkmsg=on log_buf_len=2M clk_ignore_unused pd_ignore_unused fw_devlink=off deferred_probe_timeout=120 rcupdate.rcu_cpu_stall_suppress=1";
+	};
+};
+
+&dispcc {
+	status = "okay";
+};
+
+&mdss {
+	status = "okay";
+};
+
+&mdss_dsi0 {
+	vdda-supply = <&pm6125_l18>;
+	status = "okay";
+
+	/* Stock qcom,mdss_dsi_panel_m7_38_0c_0a_fhdp_video */
+	panel@0 {
+		compatible = "xiaomi,m7-38-0c-0a";
+		reg = <0>;
+
+		vddio-supply = <&pm6125_l9>;
+		reset-gpios = <&tlmm 82 GPIO_ACTIVE_LOW>;
+		/* qcom,platform-en-gpio = <&pm6125_gpios 9 0> */
+		enable-gpios = <&pm6125_gpios 9 GPIO_ACTIVE_HIGH>;
+
+		pinctrl-0 = <&panel_te_active>;
+		pinctrl-names = "default";
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&mdss_dsi0_out>;
+			};
+		};
+	};
+};
+
+&mdss_dsi0_out {
+	data-lanes = <0 1 2 3>;
+	remote-endpoint = <&panel_in>;
+};
+
+&mdss_dsi0_phy {
+	status = "okay";
+};
+
+&tlmm {
+	panel_te_active: panel-te-active-state {
+		pins = "gpio81";
+		function = "mdp_vsync";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+};

@@ -17,7 +17,7 @@ KERNEL_URL=https://gitlab.postmarketos.org/sm6225-mainline/kernels/linux-v.7.2.1
 SRC=$WORK/linux-$KERNEL_COMMIT
 KOUT=$WORK/kernel-out
 DTS_DIR=arch/arm64/boot/dts/qcom
-VARIANTS="tapas tapas-safe"
+VARIANTS="tapas tapas-safe tapas-display"
 # Built with LLVM like the sm6225-mainline pmaports package
 KMAKE="make -C $SRC O=$KOUT ARCH=arm64 LLVM=1"
 
@@ -29,6 +29,13 @@ if [ ! -d "$SRC" ]; then
 	mv "$WORK/linux-v.7.2.1-$KERNEL_COMMIT" "$SRC"
 fi
 cp "$ROOT"/dts/*.dts "$SRC/$DTS_DIR/"
+# Drivers of our own (kernel/), hooked into the kernel's Kconfig/Makefiles
+cp -R "$ROOT"/kernel/. "$SRC"/
+PANEL=$SRC/drivers/gpu/drm/panel
+grep -q Kconfig.tapas "$PANEL/Kconfig" ||
+	sed -i '$ s|^endmenu$|source "drivers/gpu/drm/panel/Kconfig.tapas"\nendmenu|' "$PANEL/Kconfig"
+grep -q panel-xiaomi-m7-38-0c-0a "$PANEL/Makefile" ||
+	echo 'obj-$(CONFIG_DRM_PANEL_XIAOMI_M7_38_0C_0A) += panel-xiaomi-m7-38-0c-0a.o' >>"$PANEL/Makefile"
 for v in $VARIANTS; do
 	grep -q "sm6225-xiaomi-$v.dtb" "$SRC/$DTS_DIR/Makefile" ||
 		echo "dtb-\$(CONFIG_ARCH_QCOM) += sm6225-xiaomi-$v.dtb" >>"$SRC/$DTS_DIR/Makefile"

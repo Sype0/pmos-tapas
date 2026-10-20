@@ -1,0 +1,11 @@
+config DRM_PANEL_XIAOMI_M7_38_0C_0A
+	tristate "Xiaomi tapas m7 38 0c 0a DSI panel"
+	depends on GPIOLIB
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	select DRM_DISPLAY_DSC_HELPER
+	select DRM_DISPLAY_HELPER
+	help
+	  Say Y here to enable support for the 1080x2400 120 Hz AMOLED
+	  panel (Samsung DDIC with DSC) of the Xiaomi Redmi Note 12 4G.

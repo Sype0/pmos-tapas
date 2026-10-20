@@ -71,6 +71,14 @@
 		};
 	};
 
+	/* Stock vibrator_gpio: the motor runs while PM6125 GPIO8 is high */
+	vibrator {
+		compatible = "gpio-vibrator";
+		enable-gpios = <&pm6125_gpios 8 GPIO_ACTIVE_HIGH>;
+		pinctrl-0 = <&vib_en_default>;
+		pinctrl-names = "default";
+	};
+
 	/*
 	 * Xiaomi "No-PMI" charger policy, as on spes: turns the SM5602 fuel
 	 * gauge ("bms") and the bq2589x buck into the "battery" and "usb"
@@ -371,6 +379,13 @@
 };
 
 &pm6125_gpios {
+	vib_en_default: vib-en-default-state {
+		pins = "gpio8";
+		function = "normal";
+		power-source = <0>;
+		output-low;
+	};
+
 	vol_up_n: vol-up-n-state {
 		pins = "gpio5";
 		function = "normal";
