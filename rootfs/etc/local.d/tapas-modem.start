@@ -1,0 +1,19 @@
+#!/bin/sh
+# ModemManager tries to enable the modem once, ~35 s after it boots, gets
+# "Couldn't set operating mode: DeviceNotReady" and leaves it disabled.
+# Keep retrying for a few minutes, and log why the modem is not ready.
+(
+	for i in $(seq 40); do
+		echo "== $(date '+%T') try $i"
+		qmicli -p -d qrtr://0 --dms-get-operating-mode 2>&1
+		state=$(mmcli -m any -K 2>/dev/null | sed -n 's/^modem.generic.state *: *//p')
+		echo "mm state: ${state:-no modem}"
+		case $state in
+		disabled) mmcli -m any -e 2>&1 ;;
+		enabled|searching|registered|connecting|connected) break ;;
+		esac
+		sleep 15
+	done
+	mmcli -m any 2>&1
+	qmicli -p -d qrtr://0 --nas-get-system-selection-preference 2>&1
+) >/var/log/tapas-modem.log 2>&1 &

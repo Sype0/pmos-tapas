@@ -2,7 +2,11 @@
 # Build the tapas root filesystem image (ext4, label tapas_root) on a rooted
 # Android phone, as root: an Alpine minirootfs, then postmarketOS packages
 # from the pmOS repo with apk in a chroot (no pmbootstrap there).
-# Copy the result to the SD card as tapas/rootfs.img.
+# Write the result straight onto the SD card's partition (MBR type 0x83, so
+# Android leaves it alone) and grow it there:
+#   dd if=out.img of=/dev/block/mmcblk1p1 bs=4M conv=fsync
+#   e2fsck -fy /dev/block/mmcblk1p1 && resize2fs /dev/block/mmcblk1p1
+# (tapas/rootfs.img on a FAT card still works, but FAT caps it at 4 GiB.)
 #
 #   mkrootfs-android.sh <alpine-minirootfs-3.24.x-aarch64.tar.gz> <repo>/rootfs <out.img>
 set -e
@@ -98,7 +102,7 @@ echo "permit persist :wheel" >/etc/doas.d/wheel.conf
 sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 # postmarketos-base comes in for alpine-base and brings udev
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
-for s in hwclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
+for s in swclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
 for s in local sshd crond rmtfs tqftpserv msm-modem-uim-selection; do rc-update add $s default; done
 # Autologin into Plasma Mobile with greetd (rootfs/etc/greetd/config.toml)
 # instead of the tinydm that postmarketos-ui-plasma-mobile-openrc enables

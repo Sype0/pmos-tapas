@@ -1,0 +1,6 @@
+#!/bin/sh
+# The PM6125 RTC driver is a module and the rootfs has no modules, so the
+# clock starts at 1970 and HTTPS fails until NTP. swclock (boot runlevel)
+# sets the clock from this file's mtime; keep it fresh, because a long press
+# on power skips the shutdown that would save it.
+[ "$(date +%Y)" -ge 2026 ] && touch /var/lib/misc/openrc-shutdowntime
