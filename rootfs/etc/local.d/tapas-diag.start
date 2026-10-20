@@ -1,0 +1,24 @@
+#!/bin/sh
+# GPU/touch bring-up: snapshot clocks, DRM and i2c state into /var/log
+(
+	sleep 30
+	L=/var/log/tapas-diag.log
+	[ -f $L ] && mv $L $L.prev
+	exec >$L 2>&1
+	mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+	echo "== uptime"; cat /proc/uptime
+	echo "== cmdline"; cat /proc/cmdline
+	echo "== /dev/dri"; ls -l /dev/dri /sys/class/drm
+	echo "== gpu driver"; ls -l /sys/bus/platform/devices/5900000.gpu/driver
+	echo "== clk_summary (xo/gpll/qup/gpu)"
+	grep -E 'clock|xo|gpll|qupv3_wrap0|gpu|gx' /sys/kernel/debug/clk/clk_summary
+	echo "== clk orphans"; cat /sys/kernel/debug/clk/clk_orphan_summary
+	echo "== deferred"; cat /sys/kernel/debug/devices_deferred
+	echo "== i2c rebind"
+	echo 4a88000.i2c > /sys/bus/platform/drivers/geni_i2c/bind; echo "rc=$?"
+	ls /sys/bus/i2c/devices
+	echo "== input"; cat /proc/bus/input/devices
+	echo "== dmesg (msm/adreno/drm/i2c/fts/firmware)"
+	dmesg | grep -E -i 'msm|adreno|drm|a6xx|zap|i2c|fts|focal|firmware'
+	sync
+) &
