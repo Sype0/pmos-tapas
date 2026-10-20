@@ -16,6 +16,7 @@
 #include "sm6225.dtsi"
 #include "pm6125.dtsi"
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/input/linux-event-codes.h>
 
 /delete-node/ &{/memory@80000000};
@@ -98,6 +99,32 @@
 &pon_resin {
 	linux,code = <KEY_VOLUMEDOWN>;
 	status = "okay";
+};
+
+&gpi_dma0 {
+	status = "okay";
+};
+
+/* Touchscreen: FocalTech FT5452 (chip id 0x5452), pins as in stock */
+&i2c2 {
+	status = "okay";
+
+	touchscreen@38 {
+		compatible = "focaltech,fts";
+		reg = <0x38>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <80 IRQ_TYPE_EDGE_FALLING>;
+		focaltech,irq-gpio = <&tlmm 80 IRQ_TYPE_EDGE_FALLING>;
+		focaltech,reset-gpio = <&tlmm 86 GPIO_ACTIVE_LOW>;
+		focaltech,avdd-gpio = <&tlmm 36 GPIO_ACTIVE_HIGH>;
+		/* the firmware reports 10x the panel resolution */
+		focaltech,display-coords = <0 0 10799 23999>;
+		focaltech,max-touch-number = <10>;
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+		pinctrl-0 = <&ts_int_active &ts_reset_active>;
+		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
+		vcc_i2c-supply = <&pm6125_l9>;
+	};
 };
 
 &pm6125_gpios {
@@ -260,6 +287,40 @@
 			regulator-max-microvolt = <2960000>;
 			regulator-allow-set-load;
 		};
+	};
+};
+
+&qupv3_id_0 {
+	status = "okay";
+};
+
+&tlmm {
+	ts_int_active: ts-int-active-state {
+		pins = "gpio80";
+		function = "gpio";
+		drive-strength = <8>;
+		bias-pull-up;
+	};
+
+	ts_int_suspend: ts-int-suspend-state {
+		pins = "gpio80";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+
+	ts_reset_active: ts-reset-active-state {
+		pins = "gpio86";
+		function = "gpio";
+		drive-strength = <8>;
+		bias-pull-up;
+	};
+
+	ts_reset_suspend: ts-reset-suspend-state {
+		pins = "gpio86";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-down;
 	};
 };
 
