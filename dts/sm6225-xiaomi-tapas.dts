@@ -68,6 +68,20 @@
 	};
 };
 
+/*
+ * The SoC dtsi leaves the board clock rates to the board. Without them
+ * xo_board never registers, bi_tcxo stays an orphan at 0 Hz, and the QUP
+ * DFS tables read back as all zeros (geni_i2c: "Unsupported SE source
+ * clock"), so i2c2 and the touchscreen never probe.
+ */
+&xo_board {
+	clock-frequency = <19200000>;
+};
+
+&sleep_clk {
+	clock-frequency = <32764>;
+};
+
 &reserved_memory {
 	/*
 	 * Same place and layout as the stock kernel, so the log of a boot
