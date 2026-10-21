@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+supervisor=supervise-daemon
+name="tqftpserv"
+description="Qualcomm Trivial File Transfer Protocol Server"
+# tapas: log the files the remote processors ask for (tqftpserv prints
+# them with printf, so on a pty: tapas-ptylog)
+command="/usr/local/sbin/tapas-ptylog"
+command_args="/var/log/tapas-tqftp.log /usr/bin/tqftpserv"
+
+depend() {
+	before rmtfs
+	use qrtr-ns
+}

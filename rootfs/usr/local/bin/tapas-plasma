@@ -2,8 +2,8 @@
 # Plasma Mobile for greetd's autologin. greetd swallows the session's output,
 # so send it to syslog.
 exec > >(/usr/bin/logger -t plasma-session) 2>&1
-# Settings for this phone (no lock screen, no wallet). startplasmamobile puts
-# ~/.config/plasma-mobile and /etc/xdg in front of them, see kscreenlockerrc.
+# Settings for this phone (lock screen, no wallet). startplasmamobile puts
+# ~/.config/plasma-mobile and /etc/xdg in front of them.
 export XDG_CONFIG_DIRS=/etc/tapas/xdg:/etc/xdg
 # Which GPU KWin renders with (the display is simpledrm, the GPU is msm)
 export QT_LOGGING_RULES="kwin_wayland_drm.debug=true"

@@ -1,19 +1,51 @@
 #!/bin/sh
 # ModemManager tries to enable the modem once, ~35 s after it boots, gets
-# "Couldn't set operating mode: DeviceNotReady" and leaves it disabled.
-# Keep retrying for a few minutes, and log why the modem is not ready.
+# "Couldn't set operating mode: DeviceNotReady" and leaves it disabled: the
+# modem has gone from low-power to shutting-down/offline by then (see
+# tapas-modem-trace), and only a reset gets it out of offline. Keep retrying
+# for a few minutes, restart the modem once through remoteproc if it stays
+# offline, and log what it reports about the SIM and its carrier configs.
+q() {
+	timeout 20 qmicli -p -d qrtr://0 "$@" 2>&1
+}
 (
+	echo "== $(date '+%T') uptime $(cut -d' ' -f1 /proc/uptime)"
+	for a in --uim-get-card-status --uim-get-slot-status --dms-get-capabilities \
+		--pdc-list-configs=platform --pdc-list-configs=software; do
+		echo "## qmicli $a"
+		q $a
+	done
+	offline=0
+	restarted=
 	for i in $(seq 40); do
-		echo "== $(date '+%T') try $i"
-		qmicli -p -d qrtr://0 --dms-get-operating-mode 2>&1
+		mode=$(q --dms-get-operating-mode | sed -n "s/.*Mode: '\(.*\)'/\1/p")
 		state=$(mmcli -m any -K 2>/dev/null | sed -n 's/^modem.generic.state *: *//p')
-		echo "mm state: ${state:-no modem}"
+		echo "== $(date '+%T') uptime $(cut -d' ' -f1 /proc/uptime) try $i:" \
+			"mode ${mode:-?}, mm state ${state:-no modem}"
 		case $state in
-		disabled) mmcli -m any -e 2>&1 ;;
 		enabled|searching|registered|connecting|connected) break ;;
+		disabled) mmcli -m any -e 2>&1 ;;
 		esac
+		case $mode in
+		offline|shutting-down) offline=$((offline + 1)) ;;
+		*) offline=0 ;;
+		esac
+		if [ $offline -ge 4 ] && [ -z "$restarted" ]; then
+			r=$(grep -l -- -mpss-pas /sys/class/remoteproc/*/device/modalias)
+			r=${r%/device/modalias}
+			echo "== restarting $r"
+			sync
+			echo stop >"$r/state"
+			sleep 3
+			echo start >"$r/state"
+			echo "state: $(cat "$r/state")"
+			restarted=1
+			offline=0
+			sleep 30
+		fi
 		sleep 15
 	done
 	mmcli -m any 2>&1
-	qmicli -p -d qrtr://0 --nas-get-system-selection-preference 2>&1
+	q --nas-get-system-selection-preference
+	q --nas-get-serving-system
 ) >/var/log/tapas-modem.log 2>&1 &

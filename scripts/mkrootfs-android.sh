@@ -62,7 +62,8 @@ $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
 # The checkout's modes depend on its umask: make everything readable.
 cp -R "$FILES"/. "$M"/
 (cd "$FILES" && find . -mindepth 1) | while read -r p; do chmod go+rX "$M/$p"; done
-chmod 755 "$M"/etc/local.d/*.start "$M"/etc/init.d/tapas-*
+chmod 755 "$M"/etc/local.d/*.start "$M"/etc/init.d/tapas-* "$M"/etc/init.d/tqftpserv \
+	"$M"/usr/local/sbin/*
 
 # Stock firmware from this phone's vendor partitions: GPU, modem (with the
 # Wi-Fi firmware it runs and its carrier configs), IPA, ADSP and the speaker
@@ -103,7 +104,10 @@ sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 # postmarketos-base comes in for alpine-base and brings udev
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
 for s in swclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
-for s in local sshd crond rmtfs tqftpserv msm-modem-uim-selection; do rc-update add $s default; done
+# Not msm-modem-uim-selection: the modem provisions the SIM by itself, and the
+# script's deactivate/activate of that session goes with the modem dropping
+# to shutting-down/offline (DeviceNotReady in ModemManager)
+for s in local sshd crond rmtfs tqftpserv tapas-modem-trace; do rc-update add $s default; done
 # Autologin into Plasma Mobile with greetd (rootfs/etc/greetd/config.toml)
 # instead of the tinydm that postmarketos-ui-plasma-mobile-openrc enables
 sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/greetd/config.toml\"|" /etc/conf.d/greetd

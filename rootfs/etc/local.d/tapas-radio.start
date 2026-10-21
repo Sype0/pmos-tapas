@@ -15,7 +15,7 @@ snap() {
 	echo "== qrtr"; timeout 10 qrtr-lookup
 	echo "== mmcli"; timeout 20 mmcli -L; timeout 20 mmcli -m any
 	echo "== nmcli"; timeout 10 nmcli dev
-	echo "== bluetooth"; timeout 10 btmgmt info; cat /var/log/tapas-bdaddr.log
+	echo "== bluetooth"; cat /var/log/tapas-bdaddr.log; timeout 10 bluetoothctl list; timeout 10 bluetoothctl show
 	echo "== display"; ls /sys/class/drm /sys/class/backlight 2>&1; cat /sys/class/drm/*/modes 2>/dev/null
 	echo "== audio"; cat /proc/asound/cards; aplay -l 2>&1
 	echo "== dmesg"

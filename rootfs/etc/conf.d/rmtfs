@@ -1,0 +1,9 @@
+# Path to read EFS files. If unset it will be read from partitions
+#rmtfs_files_path="/var/lib/rmtfs"
+
+# Avoid writing to storage
+rmtfs_avoid_writing="true"
+
+# tapas: keep rmtfs' messages
+output_log="/var/log/tapas-rmtfs.log"
+error_log="/var/log/tapas-rmtfs.log"

@@ -1,8 +1,8 @@
-# postmarketOS locks Plasma Mobile right at login (/etc/xdg: LockOnStart=true),
-# which defeats greetd's autologin. startplasmamobile puts /etc/xdg in front
-# of this directory, so that key is locked here ([$i]). No automatic locking
-# either; those two can be turned back on in the settings.
+# greetd logs `user` in without a password, so the lock screen asks for it:
+# locked right at login, after 5 minutes idle and on resume (KDE defaults,
+# changeable in the settings).
 [Daemon]
-Autolock=false
-LockOnResume=false
-LockOnStart[$i]=false
+Autolock=true
+LockOnResume=true
+LockOnStart=true
+Timeout=5

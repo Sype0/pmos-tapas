@@ -1,0 +1,89 @@
+#!/usr/bin/python3
+# Give the unconfigured Bluetooth controller its public address over the
+# kernel's mgmt socket: what `btmgmt public-addr` does, but btmgmt prints
+# nothing and never exits when it runs without a terminal.
+# Usage: tapas-bdaddr XX:XX:XX:XX:XX:XX
+import ctypes
+import os
+import select
+import socket
+import struct
+import sys
+import time
+
+AF_BLUETOOTH, BTPROTO_HCI = 31, 1
+HCI_DEV_NONE, HCI_CHANNEL_CONTROL = 0xffff, 3
+OP_READ_INDEX_LIST = 0x0003
+OP_READ_UNCONF_INDEX_LIST = 0x0036
+OP_READ_CONFIG_INFO = 0x0037
+OP_SET_PUBLIC_ADDRESS = 0x0039
+EV_CMD_COMPLETE, EV_CMD_STATUS = 0x0001, 0x0002
+OPTION_PUBLIC_ADDRESS = 0x2
+
+
+def log(msg):
+    print(time.strftime('%T'), msg, flush=True)
+
+
+def open_mgmt():
+    s = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, BTPROTO_HCI)
+    # Python's bind() can't name the control channel, so call libc's
+    addr = struct.pack('<HHH', AF_BLUETOOTH, HCI_DEV_NONE, HCI_CHANNEL_CONTROL)
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.bind(s.fileno(), ctypes.create_string_buffer(addr), len(addr)) < 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err))
+    return s
+
+
+def cmd(s, op, index, params=b''):
+    s.send(struct.pack('<HHH', op, index, len(params)) + params)
+    end = time.monotonic() + 5
+    while (left := end - time.monotonic()) > 0:
+        if not select.select([s], [], [], left)[0]:
+            break
+        pkt = s.recv(1024)
+        ev, = struct.unpack_from('<H', pkt)
+        if ev in (EV_CMD_COMPLETE, EV_CMD_STATUS):
+            rop, status = struct.unpack_from('<HB', pkt, 6)
+            if rop == op:
+                return status, pkt[9:]
+    raise TimeoutError('no reply to mgmt command 0x%04x' % op)
+
+
+def index_list(s, op):
+    status, r = cmd(s, op, HCI_DEV_NONE)
+    if status:
+        return ()
+    n, = struct.unpack_from('<H', r)
+    return struct.unpack_from('<%dH' % n, r, 2)
+
+
+def main():
+    want = sys.argv[1]
+    bdaddr = bytes(int(b, 16) for b in reversed(want.split(':')))
+    s = open_mgmt()
+    # hci0 is re-created when tapas-late-probe rebinds the driver, so wait
+    # until a controller has finished its setup, for up to two minutes
+    for _ in range(60):
+        for i in index_list(s, OP_READ_UNCONF_INDEX_LIST):
+            status, r = cmd(s, OP_READ_CONFIG_INFO, i)
+            if status:
+                log('hci%d: read config info failed: status %d' % (i, status))
+                continue
+            manuf, supported, missing = struct.unpack_from('<HII', r)
+            log('hci%d unconfigured: manufacturer %d, options supported 0x%x missing 0x%x'
+                % (i, manuf, supported, missing))
+            if missing & OPTION_PUBLIC_ADDRESS:
+                status, _ = cmd(s, OP_SET_PUBLIC_ADDRESS, i, bdaddr)
+                log('hci%d: set public address %s: status %d' % (i, want, status))
+        configured = index_list(s, OP_READ_INDEX_LIST)
+        if configured:
+            log('configured: %s' % ' '.join('hci%d' % i for i in configured))
+            return 0
+        time.sleep(2)
+    log('no configured controller after two minutes')
+    return 1
+
+
+sys.exit(main())
