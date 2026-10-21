@@ -1,0 +1,10 @@
+config VIDEO_S5K3L6XX
+	tristate "Samsung S5K3L6XX sensor support"
+	depends on I2C && VIDEO_DEV && OF
+	select MEDIA_CONTROLLER
+	select VIDEO_V4L2_SUBDEV_API
+	select V4L2_FWNODE
+	help
+	  V4L2 driver for the Samsung S5K3L6XX 13 MP raw camera sensor, the
+	  front camera of the Xiaomi Redmi Note 12 4G (from the Purism
+	  Librem 5 kernel).

@@ -643,10 +643,15 @@
 	/* Stock qcom,dll-hsr-list */
 	qcom,ddr-config = <0x80040868>;
 	/*
-	 * SDR104 tuning always fails (-5) on mainline, while Android runs the
-	 * same card at SDR104. Stay at 3.3 V high speed, which needs no tuning.
+	 * SDR104 tuning failed (-5) on the first boots, while Android runs the
+	 * same card at SDR104. Those boots still had bi_tcxo as a 0 Hz orphan
+	 * (see &xo_board), which left the SDCC clock rates wrong. Allow UHS-I
+	 * again but mask SDR104 (caps1 bit 1): SDR50 runs at 100 MHz, where
+	 * sdhci-msm needs no tuning, twice the 3.3 V high speed rate. If the
+	 * card does not come up, the initramfs clears the UHS caps through
+	 * debugfs and it is initialised again at high speed.
 	 */
-	no-1-8-v;
+	sdhci-caps-mask = <0x00000002 0x00000000>;
 
 	broken-cd;
 	status = "okay";
@@ -734,5 +739,242 @@
 		vddrf-supply = <&pm6125_l17>;
 		vddch0-supply = <&pm6125_l23>;
 		max-speed = <3200000>;
+	};
+};
+
+/*
+ * Cameras. Slots and lines from the stock device tree; rails, addresses and
+ * chip ids from the stock camera driver's probe log (wl2866d "pwr_ctrl" and
+ * "Probe success" lines in dmesg):
+ *
+ *   slot camera     sensor  CCI addr CSIPHY MCLK reset  rails
+ *   0    rear main  S5KJN1  0   0x10 0      0    gpio18 DVDD2 1.05 V, AVDD2 2.8 V
+ *   1    front      S5K3L6  1   0x10 2      1    gpio24 DVDD1 1.2 V, AVDD1 2.8 V
+ *   2    ultra wide OV08D10 1   0x36 1      2    gpio19 AVDD1 2.8 V
+ *   3    macro      GC02M1  0   0x37 1      3    gpio68 AVDD1 2.8 V, I/O gpio99
+ *
+ * The ultra wide and the macro share CSIPHY1 behind a switch that the stock
+ * driver sets (gpio100) only for the ultra wide. The macro has no mainline
+ * driver and is left out. The stock driver switches no 1.8 V I/O rail for
+ * slots 0-2. Stock runs every MCLK at 19.2 MHz; the S5KJN1 and S5K3L6
+ * drivers want 24 MHz, which GCC makes from GPLL9.
+ */
+&i2c1 {
+	/*
+	 * Camera PMIC. The stock driver turns all four outputs on at probe
+	 * (inits = <0x04 0x4b 0x0e 0x0f>: DVDD2 1.05 V, enable mask 0xf);
+	 * kept on here while the cameras are brought up.
+	 */
+	wl2866d: pmic@28 {
+		compatible = "ovti,wl2866d";
+		reg = <0x28>;
+		enable-gpios = <&tlmm 26 GPIO_ACTIVE_HIGH>;
+		pinctrl-0 = <&cam_pmic_en_default>;
+		pinctrl-names = "default";
+
+		regulators {
+			wl2866d_dvdd1: dvdd1 {
+				regulator-name = "cam_dvdd1";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1200000>;
+				regulator-always-on;
+			};
+
+			wl2866d_dvdd2: dvdd2 {
+				regulator-name = "cam_dvdd2";
+				regulator-min-microvolt = <1050000>;
+				regulator-max-microvolt = <1050000>;
+				regulator-always-on;
+			};
+
+			wl2866d_avdd1: avdd1 {
+				regulator-name = "cam_avdd1";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-always-on;
+			};
+
+			wl2866d_avdd2: avdd2 {
+				regulator-name = "cam_avdd2";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-always-on;
+			};
+		};
+	};
+};
+
+&cci {
+	status = "okay";
+};
+
+&cci_i2c0 {
+	camera@10 {
+		compatible = "samsung,s5kjn1";
+		reg = <0x10>;
+
+		clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
+		assigned-clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
+		assigned-clock-rates = <24000000>;
+		reset-gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;
+		pinctrl-0 = <&cam_mclk0_default &cam_rear0_reset_default>;
+		pinctrl-names = "default";
+
+		vdda-supply = <&wl2866d_avdd2>;
+		vddd-supply = <&wl2866d_dvdd2>;
+
+		/* stock sensor-position-yaw 180, -roll 270 */
+		orientation = <1>;
+		rotation = <270>;
+
+		port {
+			rear_main_ep: endpoint {
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <700000000>;
+				remote-endpoint = <&csiphy0_ep>;
+			};
+		};
+	};
+};
+
+&cci_i2c1 {
+	camera@10 {
+		compatible = "samsung,s5k3l6xx";
+		reg = <0x10>;
+
+		clocks = <&gcc GCC_CAMSS_MCLK1_CLK>;
+		clock-names = "mclk";
+		clock-frequency = <24000000>;
+		assigned-clocks = <&gcc GCC_CAMSS_MCLK1_CLK>;
+		assigned-clock-rates = <24000000>;
+		rstn-gpios = <&tlmm 24 GPIO_ACTIVE_LOW>;
+		pinctrl-0 = <&cam_mclk1_default &cam_front_reset_default>;
+		pinctrl-names = "default";
+
+		vdda-supply = <&wl2866d_avdd1>;
+		vddd-supply = <&wl2866d_dvdd1>;
+
+		/* stock sensor-position-yaw 0, -roll 270 */
+		orientation = <0>;
+		rotation = <270>;
+
+		port {
+			front_ep: endpoint {
+				data-lanes = <1 2 3 4>;
+				remote-endpoint = <&csiphy2_ep>;
+			};
+		};
+	};
+
+	camera@36 {
+		compatible = "ovti,ov08d10";
+		reg = <0x36>;
+
+		clocks = <&gcc GCC_CAMSS_MCLK2_CLK>;
+		assigned-clocks = <&gcc GCC_CAMSS_MCLK2_CLK>;
+		assigned-clock-rates = <19200000>;
+		reset-gpios = <&tlmm 19 GPIO_ACTIVE_LOW>;
+		pinctrl-0 = <&cam_mclk2_default &cam_rear1_reset_default>;
+		pinctrl-names = "default";
+
+		avdd-supply = <&wl2866d_avdd1>;
+
+		/* stock sensor-position-yaw 180, -roll 90 */
+		orientation = <1>;
+		rotation = <90>;
+
+		port {
+			ultra_wide_ep: endpoint {
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <720000000 360000000>;
+				remote-endpoint = <&csiphy1_ep>;
+			};
+		};
+	};
+};
+
+&camss {
+	status = "okay";
+
+	ports {
+		port@0 {
+			csiphy0_ep: endpoint {
+				data-lanes = <0 1 2 3>;
+				remote-endpoint = <&rear_main_ep>;
+			};
+		};
+
+		port@1 {
+			csiphy1_ep: endpoint {
+				data-lanes = <0 1>;
+				remote-endpoint = <&ultra_wide_ep>;
+			};
+		};
+
+		port@2 {
+			csiphy2_ep: endpoint {
+				data-lanes = <0 1 2 3>;
+				remote-endpoint = <&front_ep>;
+			};
+		};
+	};
+};
+
+&tlmm {
+	cam_pmic_en_default: cam-pmic-en-default-state {
+		pins = "gpio26";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_mclk0_default: cam-mclk0-default-state {
+		pins = "gpio20";
+		function = "cam_mclk";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_mclk1_default: cam-mclk1-default-state {
+		pins = "gpio21";
+		function = "cam_mclk";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_mclk2_default: cam-mclk2-default-state {
+		pins = "gpio27";
+		function = "cam_mclk";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_rear0_reset_default: cam-rear0-reset-default-state {
+		pins = "gpio18";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_front_reset_default: cam-front-reset-default-state {
+		pins = "gpio24";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_rear1_reset_default: cam-rear1-reset-default-state {
+		pins = "gpio19";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	/* CSIPHY1 switch: high routes the ultra wide (stock CUSTOM_GPIO2) */
+	cam-csi-mux-hog {
+		gpio-hog;
+		gpios = <100 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "cam-csi1-mux";
 	};
 };

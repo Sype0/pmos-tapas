@@ -41,6 +41,11 @@ grep -q Kconfig.tapas "$PANEL/Kconfig" ||
 	sed -i '$ s|^endmenu$|source "drivers/gpu/drm/panel/Kconfig.tapas"\nendmenu|' "$PANEL/Kconfig"
 grep -q panel-xiaomi-m7-38-0c-0a "$PANEL/Makefile" ||
 	echo 'obj-$(CONFIG_DRM_PANEL_XIAOMI_M7_38_0C_0A) += panel-xiaomi-m7-38-0c-0a.o' >>"$PANEL/Makefile"
+SENSORS=$SRC/drivers/media/i2c
+grep -q Kconfig.tapas "$SENSORS/Kconfig" ||
+	echo 'source "drivers/media/i2c/Kconfig.tapas"' >>"$SENSORS/Kconfig"
+grep -q s5k3l6xx "$SENSORS/Makefile" ||
+	echo 'obj-$(CONFIG_VIDEO_S5K3L6XX) += s5k3l6xx.o' >>"$SENSORS/Makefile"
 for v in $VARIANTS; do
 	grep -q "sm6225-xiaomi-$v.dtb" "$SRC/$DTS_DIR/Makefile" ||
 		echo "dtb-\$(CONFIG_ARCH_QCOM) += sm6225-xiaomi-$v.dtb" >>"$SRC/$DTS_DIR/Makefile"

@@ -197,11 +197,43 @@ ext4_label() {
 		return 1
 	dd if="$1" bs=1 skip=1144 count=16 2>/dev/null | tr -d '\000'
 }
+find_root() {
+	for b in /sys/class/block/*; do
+		[ -b "/dev/${b##*/}" ] && [ "$(ext4_label "/dev/${b##*/}")" = tapas_root ] &&
+			root=/dev/${b##*/} && return 0
+	done
+	return 1
+}
 root=
-for b in /sys/class/block/*; do
-	[ -b "/dev/${b##*/}" ] && [ "$(ext4_label "/dev/${b##*/}")" = tapas_root ] &&
-		root=/dev/${b##*/} && break
-done
+find_root
+
+# The SD card is set up as UHS-I SDR50 (&sdhc_2 in the DTS). If the root
+# filesystem does not show up on it, drop the UHS modes through the mmc
+# debugfs caps: the card is then set up again at 3.3 V high speed, by the
+# card poll (there is no card detect line) or by the reset after a read
+# error.
+mkdir -p /sys/kernel/debug
+mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
+caps=/sys/kernel/debug/mmc0/caps
+if [ -z "$root" ] && [ -w "$caps" ]; then
+	for _ in $(seq 10); do
+		sleep 1
+		mdev -s
+		find_root && break
+	done
+	c=$(cat "$caps")
+	if [ -z "$root" ] && [ $(( c & 0x1f0000 )) -ne 0 ]; then
+		log "no root filesystem on the SD card in UHS mode, back to high speed"
+		printf '0x%08x\n' $(( c & ~0x1f0000 )) >"$caps"
+		[ -b /dev/mmcblk0 ] && dd if=/dev/mmcblk0 of=/dev/null bs=4k count=16 2>/dev/null &
+		for _ in $(seq 20); do
+			sleep 1
+			mdev -s
+			find_root && break
+		done
+	fi
+fi
+log "SD card: $(grep -E '^(actual clock|timing spec|signal voltage)' /sys/kernel/debug/mmc0/ios 2>/dev/null | tr -s ' \n' ' ')"
 
 # Otherwise an image file on the SD card's FAT partition: tapas/rootfs.img.
 # The card can show up late, give it some time.
@@ -229,7 +261,7 @@ if [ -z "$root" ]; then
 		umount /sd
 	done
 fi
-if [ -n "$root" ] && mount -t ext4 -o rw "$root" /newroot; then
+if [ -n "$root" ] && mount -t ext4 -o rw,noatime "$root" /newroot; then
 	init=
 	for i in /sbin/init /usr/lib/systemd/systemd; do
 		[ -x "/newroot$i" ] || [ -L "/newroot$i" ] && init=$i && break
