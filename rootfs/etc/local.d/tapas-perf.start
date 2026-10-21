@@ -1,0 +1,55 @@
+#!/bin/sh
+# Why the system feels slow: CPU frequencies and governor, thermal
+# throttling, load and the busiest processes, memory and zram, the SD
+# card's bus mode and read speed, and which GPU KWin renders with.
+# Snapshots at 2 and 7 min after boot into /var/log/tapas-perf.log.
+snap() {
+	echo "===== t=$(cut -d' ' -f1 /proc/uptime) load $(cat /proc/loadavg)"
+	echo "== cpufreq"
+	for p in /sys/devices/system/cpu/cpufreq/policy*; do
+		echo "$p: cpus $(cat $p/affected_cpus) $(cat $p/scaling_driver) $(cat $p/scaling_governor)" \
+			"cur $(cat $p/scaling_cur_freq) min $(cat $p/scaling_min_freq) max $(cat $p/scaling_max_freq)" \
+			"hw $(cat $p/cpuinfo_min_freq)-$(cat $p/cpuinfo_max_freq)"
+		echo "  available: $(cat $p/scaling_available_frequencies 2>/dev/null)"
+		echo "  time_in_state: $(tr '\n' ' ' <$p/stats/time_in_state 2>/dev/null)"
+	done
+	ls /sys/devices/system/cpu/cpufreq/ >/dev/null 2>&1 || echo "no cpufreq"
+	echo "== cpuidle"; cat /sys/devices/system/cpu/cpuidle/current_driver 2>&1
+	echo "== thermal"
+	for z in /sys/class/thermal/thermal_zone*; do
+		echo "$(cat $z/type) $(cat $z/temp 2>/dev/null)"
+	done
+	for c in /sys/class/thermal/cooling_device*; do
+		echo "$(cat $c/type) $(cat $c/cur_state)/$(cat $c/max_state)"
+	done
+	echo "== cpu time (user nice system idle iowait irq softirq)"; head -n 1 /proc/stat
+	echo "== top"; top -b -n 1 | head -n 30
+	echo "== memory"; head -n 8 /proc/meminfo; cat /proc/swaps
+	echo "== root mount"; grep ' / ' /proc/mounts
+	echo "== SD card"
+	cat /sys/kernel/debug/mmc0/ios 2>&1
+	echo "scheduler: $(cat /sys/block/mmcblk0/queue/scheduler)"
+	echo "stat: $(cat /sys/block/mmcblk0/stat)"
+	echo "== GPU"
+	ls -l /sys/class/drm/ | grep -o 'card[0-9]* -> .*'
+	k=$(pidof kwin_wayland | cut -d' ' -f1)
+	if [ -n "$k" ]; then
+		bus=$(tr '\0' '\n' </proc/$k/environ | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')
+		timeout 20 su user -s /bin/sh -c \
+			"DBUS_SESSION_BUS_ADDRESS='$bus' qdbus6 org.kde.KWin /KWin supportInformation" 2>&1 |
+			grep -E -i 'OpenGL|renderer|GPU|Compositing|Platform|drm|Refresh|Mode' | head -n 30
+	else
+		echo "no kwin_wayland"
+	fi
+}
+(
+	mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+	L=/var/log/tapas-perf.log
+	sleep 120
+	snap >$L 2>&1
+	# sequential read speed of the card (64 MiB, read only)
+	echo "== SD read speed" >>$L
+	dd if=/dev/mmcblk0 of=/dev/null bs=1M count=64 iflag=direct >>$L 2>&1
+	sleep 300
+	snap >>$L 2>&1
+) &

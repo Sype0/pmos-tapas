@@ -1,0 +1,41 @@
+#!/bin/sh
+# Camera bring-up, observation only (nothing is captured): which sensors
+# probed, the media graph, the camera PMIC rails and what libcamera sees.
+# If a sensor is missing, the CCI buses are scanned for the addresses that
+# answer. Into /var/log/tapas-camera.log, 45 s after boot.
+(
+	sleep 45
+	exec >/var/log/tapas-camera.log 2>&1
+	mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+	echo "== kernel"
+	dmesg | grep -E -i 'camss|cci|s5kjn1|s5k3l6|ov08d10|wl2866|csiphy|csid|vfe|tfe|v4l2|media'
+	echo "== sensors"
+	for d in /sys/bus/i2c/devices/*; do
+		[ -f $d/name ] || continue
+		case $(cat $d/name) in
+		*s5k*|*ov08d10*|*wl2866*) echo "${d##*/} $(cat $d/name) driver: $(readlink $d/driver | sed 's|.*/||')" ;;
+		esac
+	done
+	echo "== rails"; grep -E 'cam_|regulator ' /sys/kernel/debug/regulator/regulator_summary
+	echo "== nodes"; ls -l /dev/media* /dev/video* /dev/v4l-subdev* 2>&1 | head -n 40
+	echo "== v4l2"; v4l2-ctl --list-devices
+	for m in /dev/media*; do
+		echo "== media-ctl $m"; media-ctl -d $m -p
+	done
+	echo "== libcamera"; timeout 30 cam -l
+	echo "== CCI buses"
+	for a in /sys/bus/i2c/devices/i2c-*; do
+		n=$(cat $a/name)
+		case $n in
+		*[Cc][Cc][Ii]*)
+			echo "-- ${a##*/}: $n"
+			# only if one of its sensors has no driver
+			if ls -d $a/${a##*/i2c-}-00* >/dev/null 2>&1; then
+				for s in $a/${a##*/i2c-}-00*; do
+					[ -e $s/driver ] || { i2cdetect -y -r ${a##*/i2c-}; break; }
+				done
+			fi
+			;;
+		esac
+	done
+) &

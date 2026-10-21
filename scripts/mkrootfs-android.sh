@@ -68,6 +68,10 @@ $C /sbin/apk add plasma-dialer gnome-software gnome-software-plugin-apk2 \
 	gnome-software-plugin-flatpak flatpak lang musl-locales
 $C /usr/bin/flatpak remote-add --if-not-exists flathub \
 	https://dl.flathub.org/repo/flathub.flatpakrepo
+# Cameras: libcamera's simple pipeline (qcom-camss) with the software ISP,
+# Plasma Mobile's camera app, and the tools tapas-camera.start logs with
+$C /sbin/apk add libcamera-ipa libcamera-tools pipewire-spa-libcamera \
+	plasma-camera v4l-utils i2c-tools
 # PulseAudio without timer-based scheduling: the q6apm PCM pointer only
 # moves a period at a time, which the timer mode reads as "woken up with
 # nothing to write"
@@ -79,7 +83,7 @@ sed -i 's|^load-module module-udev-detect$|load-module module-udev-detect tsched
 cp -R "$FILES"/. "$M"/
 (cd "$FILES" && find . -mindepth 1) | while read -r p; do chmod go+rX "$M/$p"; done
 chmod 755 "$M"/etc/local.d/*.start "$M"/etc/init.d/tapas-* "$M"/etc/init.d/tqftpserv \
-	"$M"/usr/local/sbin/*
+	"$M"/usr/local/sbin/* "$M"/usr/local/bin/*
 
 # Stock firmware from this phone's vendor partitions: GPU, modem (with the
 # Wi-Fi firmware it runs and its carrier configs), IPA, ADSP and the speaker
@@ -133,7 +137,7 @@ rc-update del logbookd boot || true
 # Not msm-modem-uim-selection: the modem provisions the SIM by itself, and the
 # script's deactivate/activate of that session goes with the modem dropping
 # to shutting-down/offline (DeviceNotReady in ModemManager)
-for s in local sshd crond rmtfs tqftpserv tapas-modem-trace; do rc-update add $s default; done
+for s in local sshd crond rmtfs tqftpserv; do rc-update add $s default; done
 # Autologin into Plasma Mobile with greetd (rootfs/etc/greetd/config.toml)
 # instead of the tinydm that postmarketos-ui-plasma-mobile-openrc enables
 sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/greetd/config.toml\"|" /etc/conf.d/greetd

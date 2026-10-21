@@ -1,0 +1,60 @@
+#!/bin/bash
+# Vibration test, run by hand: sudo titresim-test
+# Three ways to make the motor run, from the kernel up to Plasma's own path,
+# asking after each whether it was felt. While the motor should run it reads
+# PM6125 GPIO8's registers back from the PMIC (debugfs), to see whether the
+# pin really went high. Everything goes to /var/log/tapas-vibra-test.log too.
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+L=/var/log/tapas-vibra-test.log
+exec > >(tee "$L") 2>&1
+
+mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+
+# PM6125 GPIO8 is SPMI peripheral 0xc700; MODE_CTL..EN_CTL are 0x40-0x46.
+# Only the PMIC's regmap (SPMI device 0-00): reads elsewhere can touch
+# hardware that is powered down.
+regs() {
+	r=/sys/kernel/debug/regmap/0-00/registers
+	[ -r $r ] || { echo "no $r"; return; }
+	w=$(head -n 1 $r | wc -c)
+	case $(dd if=$r bs=$w skip=$((0xc700)) count=1 2>/dev/null) in
+	c700:*) dd if=$r bs=$w skip=$((0xc740)) count=7 2>/dev/null | tr '\n' ' ' ;;
+	*) echo "unexpected layout of $r" ;;
+	esac
+}
+ask() {
+	printf '%s (e/h) ' "$1" >/dev/tty
+	read -r a </dev/tty
+	echo "$1 -> $a"
+}
+user_bus() {
+	k=$(pidof kwin_wayland | cut -d' ' -f1)
+	[ -n "$k" ] && tr '\0' '\n' </proc/$k/environ | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p'
+}
+
+echo "== $(date) uptime $(cut -d' ' -f1 /proc/uptime)"
+echo "GPIO8 at rest:      $(regs)"
+grep 'gpio8 ' /sys/kernel/debug/gpio
+
+echo "1) kernel force feedback, 1.5 s"
+tapas-vibrate 1500 &
+sleep 0.5
+echo "GPIO8 while on:     $(regs)"
+grep 'gpio8 ' /sys/kernel/debug/gpio
+wait
+ask "1) Telefon 1.5 saniye titredi mi?"
+
+bus=$(user_bus)
+echo "2) feedbackd (fbcli), phone-incoming-call for 3 s"
+timeout 10 su user -s /bin/sh -c "DBUS_SESSION_BUS_ADDRESS='$bus' fbcli -e phone-incoming-call -t 3" </dev/null
+ask "2) Gelen arama titreşimi oldu mu?"
+
+echo "3) Plasma's way: org.sigxcpu.Feedback.Haptic.Vibrate, 3 x 300 ms"
+timeout 10 su user -s /bin/sh -c "DBUS_SESSION_BUS_ADDRESS='$bus' gdbus call --session \
+	--dest org.sigxcpu.Feedback --object-path /org/sigxcpu/Feedback \
+	--method org.sigxcpu.Feedback.Haptic.Vibrate org.kde.plasmashell \
+	'[(1.0, uint32 300), (0.0, uint32 200), (1.0, uint32 300), (0.0, uint32 200), (1.0, uint32 300)]'"
+sleep 2
+ask "3) Üç kısa titreşim oldu mu?"
+echo "== kernel"; dmesg | grep -i -E 'vibra|gpio-vib' | tail -n 5
+echo "Kaydedildi: $L"

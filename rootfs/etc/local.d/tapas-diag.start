@@ -1,45 +1,36 @@
 #!/bin/sh
-# GPU/touch bring-up: snapshot clocks, DRM and i2c state into /var/log
+# Bring-up snapshot (DRM, deferred probes, i2c, input) into
+# /var/log/tapas-diag.log, and a copy of the session's syslog (RAM only)
+# on disk. No syncs and no rewrites without changes: the SD card is slow.
 (
 	sleep 30
 	L=/var/log/tapas-diag.log
 	[ -f $L ] && mv $L $L.prev
-	exec >$L 2>&1
-	mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
-	echo "== uptime"; cat /proc/uptime
-	echo "== cmdline"; cat /proc/cmdline
-	echo "== /dev/dri"; ls -l /dev/dri /sys/class/drm
-	echo "== gpu driver"; ls -l /sys/bus/platform/devices/5900000.gpu/driver
-	echo "== clk_summary (xo/gpll/qup/gpu)"
-	grep -E 'clock|xo|gpll|qupv3_wrap0|gpu|gx' /sys/kernel/debug/clk/clk_summary
-	echo "== clk orphans"; cat /sys/kernel/debug/clk/clk_orphan_summary
-	echo "== deferred"; cat /sys/kernel/debug/devices_deferred
-	echo "== i2c devices"; ls /sys/bus/i2c/devices
-	echo "== input"; cat /proc/bus/input/devices
-	echo "== dmesg (msm/adreno/drm/i2c/fts/firmware)"
-	dmesg | grep -E -i 'msm|adreno|drm|a6xx|zap|i2c|fts|focal|firmware'
-	echo "== touch irq (t=30s)"; grep -E 'fts|msmgpio|tlmm' /proc/interrupts
-	echo "== gpio 36/80/86"; grep -E 'gpio(36|80|86)[^0-9]' /sys/kernel/debug/gpio
-	sync
-	# touch the screen during the next 60 s
-	E=$(grep -l fts_ts /sys/class/input/event*/device/name | head -1 | cut -d/ -f5)
-	echo "== udev $E"; udevadm info /dev/input/$E | grep -E 'EVDEV_ABS|ID_INPUT'
-	echo "== raw bytes from /dev/input/$E in 60 s"
-	timeout 60 cat /dev/input/$E >/var/log/touch-raw.bin; wc -c </var/log/touch-raw.bin
-	echo "== touch irq (t=90s)"; grep -E 'fts|msmgpio|tlmm' /proc/interrupts
-	sync
-	# the session output goes to syslog (RAM only): keep a copy on disk; only
-	# replace it when logread works, syslogd stops before us at shutdown
+	{
+		mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+		echo "== uptime"; cat /proc/uptime
+		echo "== cmdline"; cat /proc/cmdline
+		echo "== /dev/dri"; ls -l /dev/dri /sys/class/drm
+		echo "== deferred"; cat /sys/kernel/debug/devices_deferred
+		echo "== i2c devices"; ls /sys/bus/i2c/devices
+		echo "== input"; cat /proc/bus/input/devices
+	} >$L 2>&1
+	# only replace the copy when logread works: syslogd stops before us at
+	# shutdown
+	last=
 	while :; do
-		logread >/var/log/syslog-copy.tmp 2>/dev/null &&
-			mv /var/log/syslog-copy.tmp /var/log/syslog-copy.log
-		sync; sleep 20
+		t=$(logread 2>/dev/null | tail -n 1)
+		if [ -n "$t" ] && [ "$t" != "$last" ]; then
+			logread >/var/log/syslog-copy.tmp 2>/dev/null &&
+				mv /var/log/syslog-copy.tmp /var/log/syslog-copy.log
+			last=$t
+		fi
+		sleep 60
 	done
 ) &
-# The panel's real refresh rate (simpledrm reports 60 Hz), once the modem
-# tests are done: this reads the display controller the bootloader set up
+# The panel's real refresh rate (simpledrm reports 60 Hz): this reads the
+# display controller the bootloader set up
 (
 	sleep 270
 	/usr/local/sbin/tapas-panel-hz >/var/log/tapas-panel.log 2>&1
-	sync
 ) &

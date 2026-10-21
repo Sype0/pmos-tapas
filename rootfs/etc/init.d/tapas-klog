@@ -1,7 +1,11 @@
 #!/sbin/openrc-run
-# Bring-up: keep the kernel log and the USB device state on disk, synced
-# every 2 s, so a failed boot can be read back from Android. The previous
-# boot's files are kept as *.prev.
+# Bring-up: keep the kernel log and the USB device state on disk, so a
+# failed boot can be read back from Android. The previous boot's files are
+# kept as *.prev.
+#
+# Written every 30 s and only when something changed, with no sync: the old
+# rewrite of the whole log plus a global sync every 2 s kept the SD card
+# busy all the time.
 
 description="Save the kernel log and USB state to /var/log"
 
@@ -29,16 +33,20 @@ start() {
 		[ -f $f ] && mv -f $f $f.prev
 	done
 	(
-		last=
+		last= tail=
 		while :; do
-			dmesg >kmsg.log.tmp && mv -f kmsg.log.tmp kmsg.log
+			# the last line, not the count: a full ring keeps its count
+			t=$(dmesg | tail -n 1)
+			if [ "$t" != "$tail" ]; then
+				dmesg >kmsg.log.tmp && mv -f kmsg.log.tmp kmsg.log
+				tail=$t
+			fi
 			s=$(cat /sys/class/udc/*/state 2>/dev/null)
 			if [ "$s" != "$last" ]; then
 				echo "$(cut -d' ' -f1 /proc/uptime) $s" >>usb-state.log
 				last=$s
 			fi
-			sync
-			sleep 2
+			sleep 30
 		done
 	) </dev/null >/dev/null 2>&1 &
 	eend 0

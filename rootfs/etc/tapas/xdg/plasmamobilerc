@@ -1,0 +1,4 @@
+# Haptic feedback length: the stock Android HAL drives this motor for about
+# 30 ms per click; Plasma's 10 ms barely starts it
+[General]
+vibrationDuration=30
