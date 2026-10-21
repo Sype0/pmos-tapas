@@ -1,0 +1,37 @@
+#!/usr/bin/python3
+# The display runs on what the bootloader set up, and simpledrm reports a
+# made-up 60 Hz mode. Measure the panel's real refresh rate from the frame
+# counter of the DPU's DSI interface (INTF_1), and print its timing.
+import ctypes
+import mmap
+import os
+import time
+
+INTF1 = 0x05e01000 + 0x6a800  # DPU (mdp) base + INTF_1, dpu_6_3_sm6115.h
+REGS = [('timing_engine_en', 0x000), ('hsync_ctl', 0x008),
+        ('vsync_period_f0', 0x010), ('vsync_pulse_width_f0', 0x018),
+        ('display_v_start_f0', 0x01c), ('display_v_end_f0', 0x024),
+        ('display_hctl', 0x03c), ('frame_count', 0x0ac)]
+
+page = INTF1 & ~(mmap.PAGESIZE - 1)
+fd = os.open('/dev/mem', os.O_RDWR | os.O_SYNC)
+mm = mmap.mmap(fd, mmap.PAGESIZE, offset=page)
+base = ctypes.addressof(ctypes.c_char.from_buffer(mm)) + INTF1 - page
+
+
+def rd(off):
+    # one 32-bit load, as the registers want
+    return ctypes.c_uint32.from_address(base + off).value
+
+
+for name, off in REGS:
+    print('%-21s 0x%08x' % (name, rd(off)))
+hsync = rd(0x008)
+htotal = hsync >> 16
+vtotal = rd(0x010) // htotal if htotal else 0
+f0, t0 = rd(0x0ac), time.monotonic()
+time.sleep(2)
+f1, t1 = rd(0x0ac), time.monotonic()
+hz = ((f1 - f0) & 0xffffffff) / (t1 - t0)
+print('htotal %d, vtotal %d' % (htotal, vtotal))
+print('refresh %.1f Hz, pixel clock %.1f MHz' % (hz, hz * htotal * vtotal / 1e6))
