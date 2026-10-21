@@ -1,0 +1,162 @@
+clk: qcom: gcc-sm6225: GPLL10/11 are Lucid PLLs in FSM legacy mode
+
+The camera TFE clocks run from GPLL10, which this driver programs as an
+SM6115-style DEFAULT_EVO PLL. On Khaje it is a Lucid PLL like GPLL8 (the
+stock kernel leaves CAL_L_VAL 0x44, CONFIG_CTL 0x20485699 and MODE bit 24,
+FSM legacy mode, in it; downstream gcc-khaje agrees), so it never locks and
+the TFE RCG fails to switch to it: "rcg didn't update its configuration",
+camss "clock enable failed: -16", no frames from any camera. Same for
+GPLL11.
+
+Lucid had been tried here before and timed out: mainline's
+clk_trion_pll_configure() ignores SUPPORTS_FSM_LEGACY_MODE, which the
+downstream version honours. Set the bit there too.
+
+--- a/drivers/clk/qcom/clk-alpha-pll.c	2026-10-21 19:38:54.297639414 +0300
++++ b/drivers/clk/qcom/clk-alpha-pll.c	2026-10-21 19:39:12.684052981 +0300
+@@ -1749,6 +1749,10 @@
+ 	regmap_update_bits(regmap, PLL_MODE(pll), PLL_UPDATE_BYPASS,
+ 			   PLL_UPDATE_BYPASS);
+ 
++	if (pll->flags & SUPPORTS_FSM_LEGACY_MODE)
++		regmap_update_bits(regmap, PLL_MODE(pll), PLL_FSM_LEGACY_MODE,
++				   PLL_FSM_LEGACY_MODE);
++
+ 	/* Disable PLL output */
+ 	regmap_update_bits(regmap, PLL_MODE(pll),  PLL_OUTCTRL, 0);
+ 
+--- a/drivers/clk/qcom/gcc-sm6225.c	2026-10-21 19:38:54.297639414 +0300
++++ b/drivers/clk/qcom/gcc-sm6225.c	2026-10-21 19:41:29.660553496 +0300
+@@ -62,20 +62,6 @@
+ 	{ 595200000, 3600000000, 0 },
+ };
+ 
+-/* GPLL10/11 use DEFAULT_EVO (taken from SM6115, the closest brother SoC).
+- * Field-tested: with Lucid both PLLs time out in wait_for_pll (-110, and
+- * the RCG then hangs with -16); with EVO they enable silently, including
+- * with the MX vote active. Frequencies unchanged (1152/600MHz) so RCG
+- * freq tables are unchanged.
+- */
+-static const struct pll_vco gpll11_evo_vco[] = {
+-	{ 500000000, 1000000000, 2 },
+-};
+-
+-static const struct pll_vco gpll10_evo_vco[] = {
+-	{ 750000000, 1500000000, 1 },
+-};
+-
+ static struct clk_alpha_pll gpll0 = {
+ 	.offset = 0x0,
+ 	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID],
+@@ -130,22 +116,32 @@
+ 	},
+ };
+ 
+-/* 1152MHz configuration - taken from SM6115 (DEFAULT_EVO) */
++/*
++ * GPLL10/11 are Lucid PLLs in FSM legacy mode like GPLL8, not DEFAULT_EVO as
++ * on SM6115: register layout and values as the stock kernel leaves them
++ * (CAL_L_VAL 0x44, CONFIG_CTL 0x20485699, MODE bit 24) and downstream
++ * gcc-khaje. Programmed as EVO they never lock and every RCG switching to
++ * them fails ("rcg didn't update its configuration", camera -EBUSY).
++ */
++
++/* 1152MHz configuration */
+ static const struct alpha_pll_config gpll10_config = {
+-	.l = 0x3c,
+-	.vco_val = 0x1 << 20,
+-	.vco_mask = GENMASK(21, 20),
+-	.main_output_mask = BIT(0),
+-	.config_ctl_val = 0x4001055b,
+-	.test_ctl_hi_val = 0x1,
+-	.test_ctl_hi_mask = 0x1,
++	.l = 0x3C,
++	.alpha = 0x0,
++	.config_ctl_val = 0x20485699,
++	.config_ctl_hi_val = 0x00002261,
++	.config_ctl_hi1_val = 0x329A299C,
++	.user_ctl_val = 0x00000001,
++	.user_ctl_hi_val = 0x00000805,
++	.user_ctl_hi1_val = 0x00000000,
+ };
+ 
+ static struct clk_alpha_pll gpll10 = {
+ 	.offset = 0xa000,
+-	.vco_table = gpll10_evo_vco,
+-	.num_vco = ARRAY_SIZE(gpll10_evo_vco),
+-	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT_EVO],
++	.vco_table = lucid_vco,
++	.num_vco = ARRAY_SIZE(lucid_vco),
++	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID],
++	.flags = SUPPORTS_FSM_LEGACY_MODE,
+ 	.clkr = {
+ 		.enable_reg = 0x79000,
+ 		.enable_mask = BIT(10),
+@@ -155,34 +151,29 @@
+ 				.index = DT_BI_TCXO,
+ 			},
+ 			.num_parents = 1,
+-			/* DIAGNOSTIC ONLY, TODO remove: pin the PLL on from
+-			 * registration so the RCG always has a live parent.
+-			 * NOTE: init flags, not the PLL .flags above. */
+-			.flags = CLK_IS_CRITICAL,
+-			.ops = &clk_alpha_pll_ops,
++			.ops = &clk_alpha_pll_lucid_ops,
+ 		},
+ 	},
+ };
+ 
+-/* 600MHz configuration - taken from SM6115 (DEFAULT_EVO) */
++/* 600MHz configuration */
+ static const struct alpha_pll_config gpll11_config = {
+ 	.l = 0x1F,
+-	.alpha = 0x0,
+-	.alpha_hi = 0x40,
+-	.alpha_en_mask = BIT(24),
+-	.vco_val = 0x2 << 20,
+-	.vco_mask = GENMASK(21, 20),
+-	.config_ctl_val = 0x4001055b,
+-	.test_ctl_hi_val = 0x1,
+-	.test_ctl_hi_mask = 0x1,
++	.alpha = 0x4000,
++	.config_ctl_val = 0x20485699,
++	.config_ctl_hi_val = 0x00002261,
++	.config_ctl_hi1_val = 0x329A299C,
++	.user_ctl_val = 0x00000001,
++	.user_ctl_hi_val = 0x00000805,
++	.user_ctl_hi1_val = 0x00000000,
+ };
+ 
+ static struct clk_alpha_pll gpll11 = {
+ 	.offset = 0xb000,
+-	.vco_table = gpll11_evo_vco,
+-	.num_vco = ARRAY_SIZE(gpll11_evo_vco),
+-	.flags = SUPPORTS_DYNAMIC_UPDATE,
+-	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT_EVO],
++	.vco_table = lucid_vco,
++	.num_vco = ARRAY_SIZE(lucid_vco),
++	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID],
++	.flags = SUPPORTS_FSM_LEGACY_MODE,
+ 	.clkr = {
+ 		.enable_reg = 0x79000,
+ 		.enable_mask = BIT(11),
+@@ -192,7 +183,7 @@
+ 				.index = DT_BI_TCXO,
+ 			},
+ 			.num_parents = 1,
+-			.ops = &clk_alpha_pll_ops,
++			.ops = &clk_alpha_pll_lucid_ops,
+ 		},
+ 	},
+ };
+@@ -3461,8 +3452,8 @@
+ 	if (ret)
+ 		return ret;
+ 
+-	clk_alpha_pll_configure(&gpll10, regmap, &gpll10_config);
+-	clk_alpha_pll_configure(&gpll11, regmap, &gpll11_config);
++	clk_lucid_pll_configure(&gpll10, regmap, &gpll10_config);
++	clk_lucid_pll_configure(&gpll11, regmap, &gpll11_config);
+ 	clk_lucid_pll_configure(&gpll8, regmap, &gpll8_config);
+ 	clk_zonda_pll_configure(&gpll9, regmap, &gpll9_config);
+ 

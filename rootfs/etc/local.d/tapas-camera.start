@@ -1,6 +1,7 @@
 #!/bin/sh
 # Camera bring-up, observation only (nothing is captured): which sensors
-# probed, the media graph, the camera PMIC rails and what libcamera sees.
+# probed, the media graph, the camera PMIC rails, the dma-buf heaps and
+# camera clocks, and what libcamera sees.
 # If a sensor is missing, the CCI buses are scanned for the addresses that
 # answer. Into /var/log/tapas-camera.log, 45 s after boot.
 (
@@ -22,6 +23,9 @@
 	for m in /dev/media*; do
 		echo "== media-ctl $m"; media-ctl -d $m -p
 	done
+	echo "== dma-buf (software ISP buffers)"; ls -l /dev/dma_heap /dev/udmabuf 2>&1
+	echo "== camera PLLs/clocks"
+	grep -E 'gpll1[01] |gpll8 |camss_tfe_[0-2]_clk|camss_tfe_cphy' /sys/kernel/debug/clk/clk_summary
 	echo "== libcamera"; timeout 30 cam -l
 	echo "== CCI buses"
 	for a in /sys/bus/i2c/devices/i2c-*; do

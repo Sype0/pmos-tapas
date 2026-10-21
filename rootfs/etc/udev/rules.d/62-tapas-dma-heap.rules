@@ -1,0 +1,3 @@
+# libcamera's software ISP takes its buffers from the system dma-buf heap
+# (udmabuf already gets video:0660 from pmOS); the heap is root-only by default.
+SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660"

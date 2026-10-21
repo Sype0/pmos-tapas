@@ -4,7 +4,8 @@
 # modem has gone from low-power to shutting-down/offline by then (see
 # tapas-modem-trace), and only a reset gets it out of offline. Keep retrying
 # for a few minutes, restart the modem once through remoteproc if it stays
-# offline, and log what it reports about the SIM and its carrier configs.
+# offline, and log what it reports about the SIM, its carrier configs and
+# SMS storage.
 # The modem also keeps small files in tqftpserv's /readwrite
 # (/var/lib/tqftpserv since tqftpserv 1.2): log what it managed to write.
 q() {
@@ -59,6 +60,9 @@ q() {
 		sleep 15
 	done
 	mmcli -m any 2>&1
+	# SMS (Spacebar): storages, and what is waiting on the modem/SIM
+	mmcli -m any --messaging-status 2>&1
+	mmcli -m any --messaging-list-sms 2>&1
 	q --dms-get-operating-mode
 	echo "## /var/lib/tqftpserv"
 	ls -l /var/lib/tqftpserv
