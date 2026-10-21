@@ -1,0 +1,24 @@
+#!/bin/sh
+# Sound and Bluetooth audio: what the sound server, the ALSA cards and
+# bluetoothd have, once a minute for 15 min (connect the headset and play
+# something meanwhile). The server's own messages are in syslog-copy.log.
+u() {
+	timeout 10 su user -s /bin/sh -c "XDG_RUNTIME_DIR=/run/user/1000 $*" 2>&1
+}
+(
+	sleep 60
+	for i in $(seq 15); do
+		echo "== $(date '+%T') uptime $(cut -d' ' -f1 /proc/uptime)"
+		ps -o pid,user,args | grep -E 'pulse|pipewire|wireplumber|bluetoothd' | grep -v grep
+		aplay -l 2>&1
+		u pactl info
+		u pactl list short sinks
+		u pactl list short sink-inputs
+		u pactl list cards
+		for d in $(timeout 5 bluetoothctl devices Connected 2>/dev/null | cut -d' ' -f2); do
+			timeout 5 bluetoothctl info "$d"
+		done
+		sync
+		sleep 60
+	done
+) >/var/log/tapas-audio.log 2>&1 &

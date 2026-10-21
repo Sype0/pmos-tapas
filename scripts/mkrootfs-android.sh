@@ -39,6 +39,7 @@ cat >"$M/etc/apk/repositories" <<'EOF'
 https://mirror.postmarketos.org/postmarketos/v26.06
 https://dl-cdn.alpinelinux.org/alpine/v3.24/main
 https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+@edge https://dl-cdn.alpinelinux.org/alpine/edge/community
 EOF
 
 C="chroot $M /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root TERM=linux"
@@ -54,9 +55,12 @@ $C /sbin/apk add alpine-base openrc busybox-extras busybox-openrc openssh \
 $C /sbin/apk add postmarketos-ui-plasma-mobile mesa-dri-gallium \
 	greetd greetd-openrc qmlkonsole
 # Modem (rmtfs, tqftpserv, UIM slot selection; pd-mapper is in the kernel)
-# and Bluetooth tools
+# and Bluetooth tools. tqftpserv from edge: 1.1.1 never writes the last,
+# short block of a windowed WRQ, so the modem's small /readwrite files
+# (server_check.txt, mcfg.tmp, lctoem.tmp) stay empty and it rewrites them
+# every 2 s without ever going online (fixed in 1.2, upstream 9ef11c0)
 $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
-	rmtfs-udev tqftpserv tqftpserv-openrc qrtr bluez-btmgmt bluez-btmon
+	rmtfs-udev tqftpserv@edge tqftpserv-openrc qrtr bluez-btmgmt bluez-btmon
 
 # Board files: gadget network, services, fstab, inittab, Plasma settings.
 # The checkout's modes depend on its umask: make everything readable.
@@ -104,6 +108,9 @@ sed -i "s|^#\?rc_logger=.*|rc_logger=\"YES\"|" /etc/rc.conf
 # postmarketos-base comes in for alpine-base and brings udev
 for s in devfs dmesg tapas-klog; do rc-update add $s sysinit; done
 for s in swclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc-update add $s boot; done
+# One logger on /dev/log: next to logbookd, busybox syslogd gets no messages
+# and logread (tapas-diag.start) nothing
+rc-update del logbookd boot || true
 # Not msm-modem-uim-selection: the modem provisions the SIM by itself, and the
 # script's deactivate/activate of that session goes with the modem dropping
 # to shutting-down/offline (DeviceNotReady in ModemManager)

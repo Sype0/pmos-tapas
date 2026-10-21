@@ -5,6 +5,8 @@
 # tapas-modem-trace), and only a reset gets it out of offline. Keep retrying
 # for a few minutes, restart the modem once through remoteproc if it stays
 # offline, and log what it reports about the SIM and its carrier configs.
+# The modem also keeps small files in tqftpserv's /readwrite
+# (/var/lib/tqftpserv since tqftpserv 1.2): log what it managed to write.
 q() {
 	timeout 20 qmicli -p -d qrtr://0 "$@" 2>&1
 }
@@ -15,8 +17,11 @@ q() {
 		echo "## qmicli $a"
 		q $a
 	done
+	echo "## qmicli --dms-get-operating-mode"
+	q --dms-get-operating-mode
 	offline=0
 	restarted=
+	kicked=
 	for i in $(seq 40); do
 		mode=$(q --dms-get-operating-mode | sed -n "s/.*Mode: '\(.*\)'/\1/p")
 		state=$(mmcli -m any -K 2>/dev/null | sed -n 's/^modem.generic.state *: *//p')
@@ -26,6 +31,14 @@ q() {
 		enabled|searching|registered|connecting|connected) break ;;
 		disabled) mmcli -m any -e 2>&1 ;;
 		esac
+		# once: the same transition by hand, through low-power
+		if [ "$state" = disabled ] && [ $i -ge 3 ] && [ -z "$kicked" ]; then
+			echo "## by hand: low-power, then online"
+			q --dms-set-operating-mode=low-power
+			q --dms-set-operating-mode=online
+			q --dms-get-operating-mode
+			kicked=1
+		fi
 		case $mode in
 		offline|shutting-down) offline=$((offline + 1)) ;;
 		*) offline=0 ;;
@@ -46,6 +59,9 @@ q() {
 		sleep 15
 	done
 	mmcli -m any 2>&1
+	q --dms-get-operating-mode
+	echo "## /var/lib/tqftpserv"
+	ls -l /var/lib/tqftpserv
 	q --nas-get-system-selection-preference
 	q --nas-get-serving-system
 ) >/var/log/tapas-modem.log 2>&1 &

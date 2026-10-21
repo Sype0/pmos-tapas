@@ -28,8 +28,8 @@
 	timeout 60 cat /dev/input/$E >/var/log/touch-raw.bin; wc -c </var/log/touch-raw.bin
 	echo "== touch irq (t=90s)"; grep -E 'fts|msmgpio|tlmm' /proc/interrupts
 	sync
-	# the session output goes to syslog (RAM only): copy it out for 10 min
-	for i in $(seq 30); do logread >/var/log/syslog-copy.log 2>&1; sync; sleep 20; done
+	# the session output goes to syslog (RAM only): keep a copy on disk
+	while :; do logread >/var/log/syslog-copy.log 2>&1; sync; sleep 20; done
 ) &
 # The panel's real refresh rate (simpledrm reports 60 Hz), once the modem
 # tests are done: this reads the display controller the bootloader set up

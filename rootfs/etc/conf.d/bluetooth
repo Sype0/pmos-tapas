@@ -1,0 +1,3 @@
+# tapas: debug messages (to syslog) of the audio profiles and of the profile
+# and device connection code, while headset audio is being brought up
+command_args="--debug='*a2dp*:*avdtp*:*avrcp*:*media*:*transport*:*hfp*:*profile.c*:*service.c*:*device.c*'"

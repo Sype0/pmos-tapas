@@ -2,10 +2,10 @@
 supervisor=supervise-daemon
 name="tqftpserv"
 description="Qualcomm Trivial File Transfer Protocol Server"
-# tapas: log the files the remote processors ask for (tqftpserv prints
-# them with printf, so on a pty: tapas-ptylog)
+# tapas: log the files the remote processors read and write (-d), on a pty
+# so that stdout is line buffered: tapas-ptylog
 command="/usr/local/sbin/tapas-ptylog"
-command_args="/var/log/tapas-tqftp.log /usr/bin/tqftpserv"
+command_args="/var/log/tapas-tqftp.log /usr/bin/tqftpserv -d"
 
 depend() {
 	before rmtfs
