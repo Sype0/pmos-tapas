@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * sm6225-xiaomi-tapas with audio: the ADSP (q6 APR services), the LPASS
- * RX/TX/VA macros, the WCD9370 codec on SoundWire and the aw87xxx speaker
- * amplifier, as on the sm6225-mainline spes board (same codec and LPASS
- * pins), with the tapas amplifier and mic bias from the stock device tree.
+ * sm6225-xiaomi-tapas with audio: the ADSP (AudioReach), the LPASS RX/TX/VA
+ * macros, the WCD9370 codec on SoundWire and the aw87xxx speaker amplifier,
+ * as on the sm6225-mainline spes board (same codec and LPASS pins), with the
+ * tapas amplifier and mic bias from the stock device tree.
+ *
+ * Unlike spes, the tapas ADSP firmware (Android 13 vendor) is AudioReach
+ * (SPF): stock talks to it over GPR on the "adsp_apps" channel, and an APR
+ * "apr_audio_svc" client never comes up. So the APR services of sm6225.dtsi
+ * are replaced by q6apm/q6prm as on qcs6490-audioreach.dtsi; the front ends
+ * and DSP graphs come from qcom/sm4250/SM6225-Tapas-tplg.bin (topology/).
  * Kept apart until it is known to come up without hanging the boot.
  */
+#include <dt-bindings/soc/qcom,gpr.h>
 #include <dt-bindings/sound/qcom,q6afe.h>
-#include <dt-bindings/sound/qcom,q6asm.h>
+#include <dt-bindings/sound/qcom,q6dsp-lpass-ports.h>
 #include "sm6225-xiaomi-tapas.dts"
 
 / {
@@ -41,39 +48,17 @@
 
 		aux-devs = <&speaker_amp>;
 
-		mm1-dai-link {
-			link-name = "MultiMedia1";
-
-			cpu {
-				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA1>;
-			};
-		};
-
-		mm2-dai-link {
-			link-name = "MultiMedia2";
-
-			cpu {
-				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA2>;
-			};
-		};
-
-		mm3-dai-link {
-			link-name = "MultiMedia3";
-
-			cpu {
-				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA3>;
-			};
-		};
+		/* MultiMedia1-3 (hw:0,0-2) come from the topology */
 
 		wcd-playback-dai-link {
 			link-name = "WCD Playback";
 
 			cpu {
-				sound-dai = <&q6afedai RX_CODEC_DMA_RX_0>;
+				sound-dai = <&q6apmbedai RX_CODEC_DMA_RX_0>;
 			};
 
 			platform {
-				sound-dai = <&q6routing>;
+				sound-dai = <&q6apm>;
 			};
 
 			codec {
@@ -88,11 +73,11 @@
 			link-name = "WCD Capture";
 
 			cpu {
-				sound-dai = <&q6afedai TX_CODEC_DMA_TX_3>;
+				sound-dai = <&q6apmbedai TX_CODEC_DMA_TX_3>;
 			};
 
 			platform {
-				sound-dai = <&q6routing>;
+				sound-dai = <&q6apm>;
 			};
 
 			codec {
@@ -106,11 +91,11 @@
 			link-name = "VA Capture";
 
 			cpu {
-				sound-dai = <&q6afedai VA_CODEC_DMA_TX_0>;
+				sound-dai = <&q6apmbedai VA_CODEC_DMA_TX_0>;
 			};
 
 			platform {
-				sound-dai = <&q6routing>;
+				sound-dai = <&q6apm>;
 			};
 
 			codec {
@@ -126,9 +111,9 @@
 		reg = <0x0 0x0a600000 0x0 0x1000>;
 		#clock-cells = <0>;
 		#sound-dai-cells = <1>;
-		clocks = <&q6afecc LPASS_CLK_ID_RX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
-			 <&q6afecc LPASS_CLK_ID_RX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
-			 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+		clocks = <&q6prmcc LPASS_CLK_ID_RX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6prmcc LPASS_CLK_ID_RX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6prmcc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
 			 <&vamacro>;
 		clock-names = "mclk", "npl", "dcodec", "fsgen";
 		clock-output-names = "mclk";
@@ -143,9 +128,9 @@
 		#sound-dai-cells = <1>;
 		pinctrl-0 = <&lpi_dmic01_active &lpi_dmic23_active>;
 		pinctrl-names = "default";
-		clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
-			 <&q6afecc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
-			 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+		clocks = <&q6prmcc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6prmcc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6prmcc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
 			 <&vamacro>;
 		clock-names = "mclk", "npl", "dcodec", "fsgen";
 		clock-output-names = "mclk";
@@ -158,9 +143,9 @@
 		qcom,dmic-sample-rate = <600000>;
 		#clock-cells = <0>;
 		#sound-dai-cells = <1>;
-		clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
-			 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
-			 <&q6afecc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
+		clocks = <&q6prmcc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6prmcc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
+			 <&q6prmcc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
 		clock-names = "mclk", "dcodec", "npl";
 		clock-output-names = "fsgen";
 		status = "okay";
@@ -422,9 +407,55 @@
 	};
 };
 
+&lpass_tlmm {
+	clocks = <&q6prmcc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
+};
+
 &remoteproc_adsp {
 	firmware-name = "qcom/sm6225/xiaomi/tapas/adsp.mdt";
 	status = "okay";
+
+	glink-edge {
+		/delete-node/ apr;
+
+		gpr {
+			compatible = "qcom,gpr";
+			qcom,glink-channels = "adsp_apps";
+			qcom,domain = <GPR_DOMAIN_ID_ADSP>;
+			qcom,intents = <512 20>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			q6apm: service@1 {
+				compatible = "qcom,q6apm";
+				reg = <GPR_APM_MODULE_IID>;
+				#sound-dai-cells = <0>;
+				qcom,protection-domain = "avs/audio", "msm/adsp/audio_pd";
+
+				q6apmdai: dais {
+					compatible = "qcom,q6apm-dais";
+					/* stock msm-audio-ion */
+					iommus = <&apps_smmu 0x1c1 0x0>;
+				};
+
+				q6apmbedai: bedais {
+					compatible = "qcom,q6apm-lpass-dais";
+					#sound-dai-cells = <1>;
+				};
+			};
+
+			q6prm: service@2 {
+				compatible = "qcom,q6prm";
+				reg = <GPR_PRM_MODULE_IID>;
+				qcom,protection-domain = "avs/audio", "msm/adsp/audio_pd";
+
+				q6prmcc: clock-controller {
+					compatible = "qcom,q6prm-lpass-clocks";
+					#clock-cells = <2>;
+				};
+			};
+		};
+	};
 };
 
 &i2c1 {

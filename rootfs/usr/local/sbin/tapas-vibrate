@@ -1,0 +1,30 @@
+#!/usr/bin/python3
+# Run the vibrator through the kernel's force feedback interface (what
+# feedbackd does): tapas-vibrate [ms] [device]
+import fcntl, glob, os, struct, sys, time
+
+ms = int(sys.argv[1]) if len(sys.argv) > 1 else 500
+dev = sys.argv[2] if len(sys.argv) > 2 else None
+if dev is None:
+    for n in glob.glob("/sys/class/input/event*/device/name"):
+        if open(n).read().strip() == "gpio-vibrator":
+            dev = "/dev/input/" + n.split("/")[4]
+if dev is None:
+    sys.exit("no gpio-vibrator input device")
+
+# struct ff_effect (arm64): type, id, direction, trigger{button, interval},
+# replay{length, delay}, padding to the 8-byte aligned union (rumble:
+# strong, weak magnitude); 48 bytes on arm64
+FF_RUMBLE = 0x50
+effect = struct.pack("=HhHHHHH2xHH28x", FF_RUMBLE, -1, 0, 0, 0, ms, 0,
+                     0xffff, 0xffff)
+EVIOCSFF = 0x40000000 | (len(effect) << 16) | (ord("E") << 8) | 0x80
+buf = bytearray(effect)
+fd = os.open(dev, os.O_RDWR)
+fcntl.ioctl(fd, EVIOCSFF, buf)
+eid = struct.unpack_from("=h", buf, 2)[0]
+# struct input_event: timeval, type EV_FF (0x15), code effect id, value 1
+os.write(fd, struct.pack("=qqHHi", 0, 0, 0x15, eid, 1))
+time.sleep(ms / 1000 + 0.1)
+os.close(fd)
+print(dev, "effect", eid, ms, "ms")

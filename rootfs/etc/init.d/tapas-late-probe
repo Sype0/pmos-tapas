@@ -2,7 +2,8 @@
 # These probe before the root filesystem, and so /lib/firmware, is mounted:
 # IPA fails its probe without ipa_fws, the Bluetooth controller's setup
 # fails without its firmware, which leaves hci0 stuck in setup, and the
-# remote processors fail their auto boot. Probe them again once the firmware
+# remote processors fail their auto boot, and the speaker amplifier gives up
+# on its profiles (aw87xxx_acf.bin) after 10 s. Probe them again once the firmware
 # is there, and start the remote processors other than the modem, which
 # rmtfs starts.
 
@@ -15,7 +16,7 @@ depend() {
 }
 
 start() {
-	ebegin "Re-probing IPA and Bluetooth, starting remote processors"
+	ebegin "Re-probing IPA, Bluetooth and the speaker amplifier, starting remote processors"
 	for d in /sys/bus/platform/devices/*.ipa; do
 		[ -e "$d/driver" ] || echo "${d##*/}" >/sys/bus/platform/drivers_probe
 	done
@@ -23,6 +24,11 @@ start() {
 		[ -e "$d" ] || continue
 		echo "${d##*/}" >/sys/bus/serial/drivers/hci_uart_qca/unbind
 		echo "${d##*/}" >/sys/bus/serial/drivers/hci_uart_qca/bind
+	done
+	for d in /sys/bus/i2c/drivers/aw87xxx_pa/*-*; do
+		[ -e "$d" ] || continue
+		echo "${d##*/}" >/sys/bus/i2c/drivers/aw87xxx_pa/unbind
+		echo "${d##*/}" >/sys/bus/i2c/drivers/aw87xxx_pa/bind
 	done
 	for r in /sys/class/remoteproc/remoteproc*; do
 		[ -e "$r" ] || continue

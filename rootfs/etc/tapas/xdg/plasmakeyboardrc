@@ -1,0 +1,3 @@
+# tapas: Turkish on-screen keyboard first, English second
+[General]
+enabledLocales=tr_TR,en_US

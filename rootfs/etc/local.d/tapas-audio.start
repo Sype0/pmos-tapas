@@ -7,6 +7,9 @@ u() {
 }
 (
 	sleep 60
+	# AudioReach card: PCMs from the topology, routing controls for UCM
+	cat /proc/asound/cards /proc/asound/pcm
+	amixer -c 0 controls 2>&1 | grep -E -i 'Audio Mixer|MultiMedia|RDAC|aw87|Speaker'
 	for i in $(seq 15); do
 		echo "== $(date '+%T') uptime $(cut -d' ' -f1 /proc/uptime)"
 		ps -o pid,user,args | grep -E 'pulse|pipewire|wireplumber|bluetoothd|callaudiod|modem-daemon|telephony-daemon' | grep -v grep

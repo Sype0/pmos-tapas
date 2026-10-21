@@ -1,0 +1,4 @@
+# The vibrator (gpio-vibrator, force feedback only) for feedbackd, even if
+# input_id did not tag it: libinput reports it as "not tagged as supported
+# input device", and feedbackd's own rule needs ID_INPUT=1.
+ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="gpio-vibrator", ENV{ID_INPUT}="1", ENV{FEEDBACKD_TYPE}="vibra", TAG+="uaccess", GROUP="feedbackd", MODE="0660"

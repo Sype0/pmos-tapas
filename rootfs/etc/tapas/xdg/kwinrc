@@ -1,0 +1,6 @@
+# tapas: no blur or background contrast behind panels and the app drawer
+# (costly on simpledrm scanout, and the user turned it off)
+[Plugins]
+blurEnabled=false
+contrastEnabled=false
+forceblurEnabled=false

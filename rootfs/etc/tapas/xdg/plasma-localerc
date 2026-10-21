@@ -1,0 +1,6 @@
+# tapas: Turkish interface and formats
+[Formats]
+LANG=tr_TR.UTF-8
+
+[Translations]
+LANGUAGE=tr

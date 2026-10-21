@@ -1,6 +1,9 @@
 // tapas: Plasma's Wi-Fi, mobile network, Bluetooth and power settings get
 // "not authorized" from polkit, because the autologin session is not seen
-// as an active local one. Let the phone's user (wheel) do these directly.
+// as an active local one (and Plasma's polkit agent fails to register, so
+// nothing can ask for the password either). Let the phone's user (wheel) do
+// these directly, including installing software from Discover (Alpine apk
+// and Flatpak).
 polkit.addRule(function(action, subject) {
 	if (!subject.isInGroup("wheel"))
 		return polkit.Result.NOT_HANDLED;
@@ -14,6 +17,12 @@ polkit.addRule(function(action, subject) {
 		"org.freedesktop.hostname1.",
 		"org.freedesktop.udisks2.",
 		"org.freedesktop.UPower",
+		"org.kde.discover.",
+		"org.freedesktop.Flatpak.",
+		"org.freedesktop.packagekit.",
+		"dev.Cogitri.apkPolkit",
+		"org.kde.powerdevil.",
+		"org.kde.kcontrol.",
 	];
 	for (var i = 0; i < prefixes.length; i++)
 		if (action.id.indexOf(prefixes[i]) == 0)

@@ -1,0 +1,33 @@
+#!/bin/sh
+# Vibrator check: the phone should buzz twice, ~40 s after boot (kernel force
+# feedback) and ~150 s after boot (feedbackd, from the Plasma session).
+# Results in /var/log/tapas-vibra.log.
+(
+	L=/var/log/tapas-vibra.log
+	exec >$L 2>&1
+	sleep 40
+	E=$(grep -l gpio-vibrator /sys/class/input/event*/device/name | head -1 | cut -d/ -f5)
+	echo "== uptime $(cut -d' ' -f1 /proc/uptime), device $E"
+	ls -l /dev/input/$E
+	udevadm info /dev/input/$E | grep -E 'ID_INPUT|FEEDBACKD|TAGS'
+	mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+	echo "== pmic gpio8 before"; grep -A1 -E '^ *gpio8[^0-9]' /sys/kernel/debug/pinctrl/*c000*/pinconf-pins 2>/dev/null
+	grep -E 'gpio8[^0-9]|vibra' /sys/kernel/debug/gpio
+	echo "== force feedback 700 ms"
+	/usr/local/sbin/tapas-vibrate 700 /dev/input/$E &
+	sleep 0.3
+	echo "== while vibrating"; grep -E 'gpio8[^0-9]|vibra' /sys/kernel/debug/gpio
+	wait
+	sync
+	sleep 110
+	echo "== uptime $(cut -d' ' -f1 /proc/uptime): feedbackd"
+	P=$(pgrep -u user -x plasmashell | head -1)
+	[ -n "$P" ] || P=$(pgrep -u user feedbackd | head -1)
+	B=$(tr '\0' '\n' </proc/$P/environ 2>/dev/null | grep ^DBUS_SESSION_BUS_ADDRESS=)
+	echo "session bus: ${B:-none}"
+	ps -o pid,user,args | grep -E '[f]eedbackd|[f]bd'
+	[ -n "$B" ] && su user -s /bin/sh -c "export $B; timeout 10 fbcli -E phone-incoming-call -t 2; echo fbcli exit \$?"
+	echo "== feedbackd profile"
+	su user -s /bin/sh -c "export $B; gsettings get org.sigxcpu.feedbackd profile" 2>&1
+	sync
+) &

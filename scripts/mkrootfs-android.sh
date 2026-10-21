@@ -61,6 +61,12 @@ $C /sbin/apk add postmarketos-ui-plasma-mobile mesa-dri-gallium \
 # every 2 s without ever going online (fixed in 1.2, upstream 9ef11c0)
 $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
 	rmtfs-udev tqftpserv@edge tqftpserv-openrc qrtr bluez-btmgmt bluez-btmon
+# Phone app, software centre (Alpine packages and Flathub), Turkish
+# translations of everything installed (lang pulls the -lang subpackages)
+$C /sbin/apk add plasma-dialer discover discover-backend-apk \
+	discover-backend-flatpak flatpak lang musl-locales
+$C /usr/bin/flatpak remote-add --if-not-exists flathub \
+	https://dl.flathub.org/repo/flathub.flatpakrepo
 
 # Board files: gadget network, services, fstab, inittab, Plasma settings.
 # The checkout's modes depend on its umask: make everything readable.
@@ -88,6 +94,13 @@ ${PYTHON:-python3} "$(dirname "$0")/ath10k-bd.py" /vendor/firmware_mnt/image "$A
 cp /vendor/firmware_mnt/image/bdwlan.bin "$A/board.bin"
 $C /usr/bin/wget -q -O /lib/firmware/ath10k/WCN3990/hw1.0/xiaomi-tapas/firmware-5.bin \
 	https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath10k/WCN3990/hw1.0/qcm2290/firmware-5.bin
+# The sound card's AudioReach topology (ADSP graphs and front ends)
+mkdir -p "$M/tmp/tapas-topology"
+cp "$(dirname "$0")/mktplg.sh" "$(dirname "$0")"/../topology/*.m4 "$M/tmp/tapas-topology/"
+$C /sbin/apk add --virtual .tapas-tplg git m4
+$C /bin/sh /tmp/tapas-topology/mktplg.sh /tmp/tapas-topology /lib/firmware
+$C /sbin/apk del .tapas-tplg
+rm -rf "$M/tmp/tapas-topology"
 chown -R 0:0 "$FW"
 chmod -R u=rwX,go=rX "$FW"
 # Bluetooth address for tapas-bdaddr.start
