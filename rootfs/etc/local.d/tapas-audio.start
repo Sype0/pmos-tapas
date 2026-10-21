@@ -9,7 +9,7 @@ u() {
 	sleep 60
 	for i in $(seq 15); do
 		echo "== $(date '+%T') uptime $(cut -d' ' -f1 /proc/uptime)"
-		ps -o pid,user,args | grep -E 'pulse|pipewire|wireplumber|bluetoothd' | grep -v grep
+		ps -o pid,user,args | grep -E 'pulse|pipewire|wireplumber|bluetoothd|callaudiod|modem-daemon|telephony-daemon' | grep -v grep
 		aplay -l 2>&1
 		u pactl info
 		u pactl list short sinks
