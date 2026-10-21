@@ -1,0 +1,60 @@
+simpledrm: optional refresh-rate for the simple-framebuffer
+
+simpledrm reports a fixed 60 Hz mode, so KWin paces itself at 60 Hz on a
+panel the bootloader drives at 120 Hz. Take the rate from an optional
+refresh-rate property of the simple-framebuffer node.
+
+--- a/drivers/gpu/drm/sysfb/simpledrm.c
++++ b/drivers/gpu/drm/sysfb/simpledrm.c
+@@ -162,6 +162,25 @@
+ 	return simplefb_get_validated_int(dev, "stride", stride);
+ }
+ 
++/*
++ * The rate the bootloader drives the panel at. Not part of the binding: the
++ * mode is made up either way, but compositors pace their frames by it.
++ */
++static int
++simplefb_get_refresh_rate_of(struct drm_device *dev, struct device_node *of_node)
++{
++	u32 refresh;
++
++	if (of_property_read_u32(of_node, "refresh-rate", &refresh))
++		return 0;
++	if (refresh > 1000) {
++		drm_warn(dev, "simplefb: refresh-rate of %u Hz ignored\n", refresh);
++		return 0;
++	}
++
++	return refresh;
++}
++
+ static const struct drm_format_info *
+ simplefb_get_format_of(struct drm_device *dev, struct device_node *of_node)
+ {
+@@ -628,6 +647,7 @@
+ 	struct drm_device *dev;
+ 	int width, height, stride;
+ 	u16 width_mm = 0, height_mm = 0;
++	unsigned int refresh = 0;
+ 	struct device_node *panel_node;
+ 	const struct drm_format_info *format;
+ 	struct resource *res, *mem = NULL;
+@@ -689,6 +709,7 @@
+ 		mem = simplefb_get_memory_of(dev, of_node);
+ 		if (IS_ERR(mem))
+ 			return ERR_CAST(mem);
++		refresh = simplefb_get_refresh_rate_of(dev, of_node);
+ 		panel_node = of_parse_phandle(of_node, "panel", 0);
+ 		if (panel_node) {
+ 			/*
+@@ -722,6 +743,9 @@
+ 	}
+ 
+ 	sysfb->fb_mode = drm_sysfb_mode(width, height, width_mm, height_mm);
++	/* drm_sysfb_mode() assumes 60 Hz, with no blanking */
++	if (refresh)
++		sysfb->fb_mode.clock = DIV_ROUND_UP_ULL((u64)width * height * refresh, 1000);
+ 	sysfb->fb_format = format;
+ 	sysfb->fb_pitch = stride;
+ 

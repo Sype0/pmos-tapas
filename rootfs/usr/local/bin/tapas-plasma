@@ -12,6 +12,17 @@ export XDG_CONFIG_DIRS=/etc/tapas/xdg:/etc/xdg
 for f in /etc/profile.d/00locale.sh /etc/profile.d/flatpak.sh; do
 	[ -r "$f" ] && . "$f"
 done
+# The blur the user sees is not KWin's (off in /etc/tapas/xdg/kwinrc) but the
+# Folio home screen's own wallpaper blur: wallpaperBlurEffect 0 = none. Only
+# set once, so a later choice in the home screen settings sticks.
+A=$HOME/.config/plasma-org.kde.plasma.mobileshell-appletsrc
+id=$(awk -F'[][]' '/^\[Containments\]\[[0-9]+\]$/ { c = $4 }
+	/^plugin=org.kde.plasma.mobile.homescreen.folio$/ { print c; exit }' "$A" 2>/dev/null)
+if [ -n "$id" ] && [ -z "$(kreadconfig6 --file "$A" --group Containments --group "$id" \
+	--group General --key wallpaperBlurEffect)" ]; then
+	kwriteconfig6 --file "$A" --group Containments --group "$id" \
+		--group General --key wallpaperBlurEffect 0
+fi
 # Which GPU KWin renders with (the display is simpledrm, the GPU is msm)
 export QT_LOGGING_RULES="kwin_wayland_drm.debug=true"
 exec /usr/bin/dbus-run-session /usr/bin/startplasmamobile

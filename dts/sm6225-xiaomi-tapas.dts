@@ -55,7 +55,24 @@
 			height = <2400>;
 			stride = <(1080 * 4)>;
 			format = "a8r8g8b8";
+			/*
+			 * ABL leaves the panel at 120 Hz (measured from the DPU
+			 * frame counter); simpledrm reports 60 Hz without this
+			 * (patches/0001-simpledrm-refresh-rate.patch)
+			 */
+			refresh-rate = <120>;
+			panel = <&framebuffer_panel>;
 		};
+	};
+
+	/*
+	 * The panel's size for simpledrm (stock qcom,mdss-pan-physical-*-
+	 * dimension: 69.5 x 154.6 mm). No compatible: nothing binds to it, and
+	 * fw_devlink=off keeps simpledrm from waiting for it as a supplier.
+	 */
+	framebuffer_panel: framebuffer-panel {
+		width-mm = <70>;
+		height-mm = <155>;
 	};
 
 	gpio-keys {

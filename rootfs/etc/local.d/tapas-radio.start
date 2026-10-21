@@ -31,18 +31,12 @@ snap() {
 	sleep 120
 	snap >>$L 2>&1
 	sync
-	# A short tone on the speaker through the UCM profile, if there is a card
+	# The sound card's mixer as the sound server left it. No test tone: it
+	# took hw:0,0 away from PulseAudio while the user was playing music.
 	if [ -e /proc/asound/card0 ]; then
-		echo "===== speaker test"
+		echo "===== mixer"
 		cat /proc/asound/cards
-		alsaucm -c 0 list _verbs
-		alsaucm -c 0 set _verb HiFi set _enadev Speaker
-		timeout 6 speaker-test -D hw:0,0 -c 2 -r 48000 -t sine -f 440 -l 1
-		amixer -c 0 contents | head -n 400
-		# hw:0,0 is busy if the sound server holds it: then through it
-		echo "===== speaker test through the sound server"
-		timeout 15 su user -s /bin/sh -c "export XDG_RUNTIME_DIR=/run/user/1000
-			pactl list sinks; speaker-test -D pulse -c 2 -t sine -f 440 -l 1"
+		amixer -c 0 contents
 	fi >>$L 2>&1
 	sync
 ) &

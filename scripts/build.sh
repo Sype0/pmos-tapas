@@ -31,6 +31,11 @@ fi
 cp "$ROOT"/dts/*.dts "$SRC/$DTS_DIR/"
 # Drivers of our own (kernel/), hooked into the kernel's Kconfig/Makefiles
 cp -R "$ROOT"/kernel/. "$SRC"/
+# Patches of our own, applied once (the tree stays in $WORK between builds)
+for p in "$ROOT"/patches/*.patch; do
+	patch -d "$SRC" -p1 -R -s -f --dry-run <"$p" >/dev/null 2>&1 ||
+		patch -d "$SRC" -p1 -s -N <"$p"
+done
 PANEL=$SRC/drivers/gpu/drm/panel
 grep -q Kconfig.tapas "$PANEL/Kconfig" ||
 	sed -i '$ s|^endmenu$|source "drivers/gpu/drm/panel/Kconfig.tapas"\nendmenu|' "$PANEL/Kconfig"

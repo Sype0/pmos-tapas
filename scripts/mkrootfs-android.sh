@@ -62,11 +62,17 @@ $C /sbin/apk add postmarketos-ui-plasma-mobile mesa-dri-gallium \
 $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
 	rmtfs-udev tqftpserv@edge tqftpserv-openrc qrtr bluez-btmgmt bluez-btmon
 # Phone app, software centre (Alpine packages and Flathub), Turkish
-# translations of everything installed (lang pulls the -lang subpackages)
-$C /sbin/apk add plasma-dialer discover discover-backend-apk \
-	discover-backend-flatpak flatpak lang musl-locales
+# translations of everything installed (lang pulls the -lang subpackages).
+# GNOME Software rather than Discover, which kept freezing on the phone.
+$C /sbin/apk add plasma-dialer gnome-software gnome-software-plugin-apk2 \
+	gnome-software-plugin-flatpak flatpak lang musl-locales
 $C /usr/bin/flatpak remote-add --if-not-exists flathub \
 	https://dl.flathub.org/repo/flathub.flatpakrepo
+# PulseAudio without timer-based scheduling: the q6apm PCM pointer only
+# moves a period at a time, which the timer mode reads as "woken up with
+# nothing to write"
+sed -i 's|^load-module module-udev-detect$|load-module module-udev-detect tsched=0|' \
+	"$M/etc/pulse/default.pa"
 
 # Board files: gadget network, services, fstab, inittab, Plasma settings.
 # The checkout's modes depend on its umask: make everything readable.
