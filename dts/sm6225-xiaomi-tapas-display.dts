@@ -16,6 +16,11 @@
 	};
 };
 
+/* The DPU driver votes for its own bandwidth here */
+&display_bw_hold {
+	status = "disabled";
+};
+
 &dispcc {
 	status = "okay";
 };

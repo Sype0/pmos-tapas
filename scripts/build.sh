@@ -46,6 +46,11 @@ grep -q Kconfig.tapas "$SENSORS/Kconfig" ||
 	echo 'source "drivers/media/i2c/Kconfig.tapas"' >>"$SENSORS/Kconfig"
 grep -q s5k3l6xx "$SENSORS/Makefile" ||
 	echo 'obj-$(CONFIG_VIDEO_S5K3L6XX) += s5k3l6xx.o' >>"$SENSORS/Makefile"
+MISC=$SRC/drivers/misc
+grep -q Kconfig.tapas "$MISC/Kconfig" ||
+	sed -i '$ s|^endmenu$|source "drivers/misc/Kconfig.tapas"\nendmenu|' "$MISC/Kconfig"
+grep -q tapas-icc-hold "$MISC/Makefile" ||
+	echo 'obj-$(CONFIG_TAPAS_ICC_HOLD) += tapas-icc-hold.o' >>"$MISC/Makefile"
 for v in $VARIANTS; do
 	grep -q "sm6225-xiaomi-$v.dtb" "$SRC/$DTS_DIR/Makefile" ||
 		echo "dtb-\$(CONFIG_ARCH_QCOM) += sm6225-xiaomi-$v.dtb" >>"$SRC/$DTS_DIR/Makefile"

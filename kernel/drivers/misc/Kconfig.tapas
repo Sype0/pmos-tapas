@@ -1,0 +1,8 @@
+config TAPAS_ICC_HOLD
+	tristate "Bandwidth vote for the bootloader's display scanout"
+	depends on INTERCONNECT && OF
+	help
+	  Holds a DDR bandwidth vote, from the device tree, for the display
+	  the bootloader left scanning out (simpledrm), which no kernel driver
+	  votes for while the MDSS driver is off. Without it the scanout can
+	  underrun when DDR clocks down.

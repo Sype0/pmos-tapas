@@ -158,6 +158,23 @@
 	clock-frequency = <32764>;
 };
 
+/ {
+	/*
+	 * The MDSS driver is off, so nothing votes for the MDP's path to DDR:
+	 * once the interconnects drop their boot-time votes, DDR can clock
+	 * down below what the bootloader's 120 Hz 1080x2400 scanout fetches
+	 * (about 1.25 GB/s) and the picture breaks up now and then. Hold a
+	 * vote for it (kernel/drivers/misc/tapas-icc-hold.c). Always tag: the
+	 * scanout goes on while the CPUs sleep.
+	 */
+	display_bw_hold: display-bw-hold {
+		compatible = "tapas,icc-hold";
+		interconnects = <&mmrt_virt MASTER_MDP_PORT0 RPM_ALWAYS_TAG
+				 &bimc SLAVE_EBI_CH0 RPM_ALWAYS_TAG>;
+		tapas,bandwidth-kBps = <1500000 3000000>;
+	};
+};
+
 &reserved_memory {
 	/*
 	 * Same place and layout as the stock kernel, so the log of a boot
