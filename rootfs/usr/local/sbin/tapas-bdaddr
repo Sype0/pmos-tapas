@@ -59,13 +59,32 @@ def index_list(s, op):
     return struct.unpack_from('<%dH' % n, r, 2)
 
 
+QCA_DRV = '/sys/bus/serial/drivers/hci_uart_qca'
+
+
+def rebind():
+    # Closing hci0 does not really power the WCN3950 off (its rails are
+    # shared with the Wi-Fi), so the setup that setting the address reruns
+    # sometimes meets a patched controller and fails ("TLV response size
+    # mismatch") and hci0 is left unusable. A fresh probe recovers it.
+    for d in os.listdir(QCA_DRV):
+        if d.startswith('serial'):
+            log('rebinding %s' % d)
+            for f in ('unbind', 'bind'):
+                with open(os.path.join(QCA_DRV, f), 'w') as fh:
+                    fh.write(d)
+
+
 def main():
     want = sys.argv[1]
     bdaddr = bytes(int(b, 16) for b in reversed(want.split(':')))
     s = open_mgmt()
     # hci0 is re-created when tapas-late-probe rebinds the driver, so wait
-    # until a controller has finished its setup, for up to two minutes
-    for _ in range(60):
+    # until a controller has finished its setup, for up to two minutes; once
+    # the address is set, give the controller 20 s to come up configured,
+    # else rebind the driver and try again, four times at most
+    tries, waited, since_set = 0, 0, None
+    while waited < 120:
         for i in index_list(s, OP_READ_UNCONF_INDEX_LIST):
             status, r = cmd(s, OP_READ_CONFIG_INFO, i)
             if status:
@@ -74,15 +93,27 @@ def main():
             manuf, supported, missing = struct.unpack_from('<HII', r)
             log('hci%d unconfigured: manufacturer %d, options supported 0x%x missing 0x%x'
                 % (i, manuf, supported, missing))
-            if missing & OPTION_PUBLIC_ADDRESS:
+            if missing & OPTION_PUBLIC_ADDRESS and since_set is None:
                 status, _ = cmd(s, OP_SET_PUBLIC_ADDRESS, i, bdaddr)
                 log('hci%d: set public address %s: status %d' % (i, want, status))
+                tries += 1
+                since_set = 0
         configured = index_list(s, OP_READ_INDEX_LIST)
         if configured:
             log('configured: %s' % ' '.join('hci%d' % i for i in configured))
             return 0
         time.sleep(2)
-    log('no configured controller after two minutes')
+        if since_set is None:
+            waited += 2
+            continue
+        since_set += 2
+        if since_set >= 20:
+            if tries >= 4:
+                break
+            log('not configured 20 s after setting the address')
+            rebind()
+            since_set, waited = None, 0
+    log('no configured controller (address set %d times)' % tries)
     return 1
 
 
