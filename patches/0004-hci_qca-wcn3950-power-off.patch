@@ -1,0 +1,41 @@
+Bluetooth: hci_qca: power WCN3950 off like the other WCN399x
+
+WCN3950 was added to the WCN399x cases of the power-on and setup paths
+but not to qca_power_off() and qca_serdev_remove(): closing hci0 sent no
+power-off pulse and left the regulators on, so the controller kept running
+the patch it had downloaded. The next open (bluetoothd powering it, or
+setting the public address) then reran the setup on a patched controller,
+whose answer to the first TLV segment is not the expected one:
+
+  Bluetooth: hci0: QCA TLV response size mismatch
+  Bluetooth: hci0: QCA Failed to request file: qca/cmbtfw13.tlv (-84)
+  Bluetooth: hci0: Retry BT power ON:0..2
+
+and hci0 stayed unconfigured. Handle WCN3950 like WCN3988/3990/3991/3998.
+
+--- a/drivers/bluetooth/hci_qca.c
++++ b/drivers/bluetooth/hci_qca.c
+@@ -2247,6 +2247,7 @@
+ 	power = qcadev->bt_power;
+ 
+ 	switch (soc_type) {
++	case QCA_WCN3950:
+ 	case QCA_WCN3988:
+ 	case QCA_WCN3990:
+ 	case QCA_WCN3991:
+@@ -2271,6 +2272,7 @@
+         }
+ 
+ 	switch (soc_type) {
++	case QCA_WCN3950:
+ 	case QCA_WCN3988:
+ 	case QCA_WCN3990:
+ 	case QCA_WCN3991:
+@@ -2582,6 +2584,7 @@
+ 	struct qca_power *power = qcadev->bt_power;
+ 
+ 	switch (qcadev->btsoc_type) {
++	case QCA_WCN3950:
+ 	case QCA_WCN3988:
+ 	case QCA_WCN3990:
+ 	case QCA_WCN3991:

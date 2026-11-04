@@ -68,4 +68,15 @@ q() {
 	ls -l /var/lib/tqftpserv
 	q --nas-get-system-selection-preference
 	q --nas-get-serving-system
+	# Mobile data: NetworkManager's GSM connection, ModemManager's bearers
+	# and the data interfaces (rmnet over IPA)
+	sleep 30
+	echo "== $(date '+%T') uptime $(cut -d' ' -f1 /proc/uptime) mobile data"
+	nmcli -f GENERAL.STATE,GENERAL.CONNECTION device show qrtr0 2>&1
+	nmcli -f NAME,TYPE,AUTOCONNECT,DEVICE connection show 2>&1
+	for b in $(mmcli -m any --list-bearers 2>/dev/null | sed -n 's|.*/Bearer/\([0-9]*\).*|\1|p'); do
+		mmcli -b "$b" 2>&1
+	done
+	ip -br addr 2>&1 | grep -E 'rmnet|qmap|wwan'
+	q --wds-get-packet-service-status
 ) >/var/log/tapas-modem.log 2>&1 &

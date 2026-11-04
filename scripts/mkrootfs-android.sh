@@ -116,6 +116,32 @@ chmod -R u=rwX,go=rX "$FW"
 # Bluetooth address for tapas-bdaddr.start
 mkdir -p "$M/etc/tapas"
 settings get secure bluetooth_address >"$M/etc/tapas/bdaddr"
+# Mobile data: NetworkManager needs a GSM connection, or Plasma Mobile's
+# mobile data switch only turns autoconnect on and nothing connects. Make one
+# from the APN Android uses for this SIM (protocol IP: IPv4 only).
+row=$(content query --uri content://telephony/carriers/preferapn \
+	--projection apn:protocol:user:password 2>/dev/null | head -n 1)
+field() { echo "$row" | sed -n "s/.*[ ,]$1=\([^,]*\).*/\1/p" | sed 's/^NULL$//'; }
+apn=$(field apn)
+if [ -n "$apn" ]; then
+	NMC=$M/etc/NetworkManager/system-connections/mobile-data.nmconnection
+	mkdir -p "${NMC%/*}"
+	case $(field protocol) in
+	IP) ip6=disabled ;;
+	*) ip6=auto ;;
+	esac
+	{
+		printf '[connection]\nid=Mobile data (%s)\nuuid=%s\ntype=gsm\nautoconnect=true\n\n' \
+			"$apn" "$(cat /proc/sys/kernel/random/uuid)"
+		printf '[gsm]\napn=%s\n' "$apn"
+		u=$(field user) pw=$(field password)
+		[ -n "$u" ] && printf 'username=%s\n' "$u"
+		[ -n "$pw" ] && printf 'password=%s\npassword-flags=0\n' "$pw"
+		printf '\n[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=%s\n' "$ip6"
+	} >"$NMC"
+	chown 0:0 "$NMC"
+	chmod 600 "$NMC"
+fi
 
 echo tapas >"$M/etc/hostname"
 printf '127.0.0.1\tlocalhost tapas\n::1\t\tlocalhost tapas\n' >"$M/etc/hosts"
