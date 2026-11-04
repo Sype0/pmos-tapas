@@ -66,6 +66,12 @@ $C /sbin/apk add msm-modem msm-modem-uim-selection-openrc rmtfs-openrc \
 # GNOME Software rather than Discover, which kept freezing on the phone.
 $C /sbin/apk add plasma-dialer gnome-software gnome-software-plugin-apk2 \
 	gnome-software-plugin-flatpak flatpak lang musl-locales
+# Everyday apps: SMS (Spacebar, also the sms: handler in
+# rootfs/etc/xdg/mimeapps.list), contacts, clock/alarms, weather,
+# calculator, gallery, music, video (Clapper: Haruna needs yt-dlp, which
+# is only in edge), calendar, notes, PDF, files, voice recorder, QR codes
+$C /sbin/apk add spacebar plasma-phonebook kclock kweather kalk koko elisa \
+	clapper calindori marknote okular-mobile dolphin krecorder qrca
 $C /usr/bin/flatpak remote-add --if-not-exists flathub \
 	https://dl.flathub.org/repo/flathub.flatpakrepo
 # Cameras: libcamera's simple pipeline (qcom-camss) with the software ISP,
@@ -161,7 +167,7 @@ for s in swclock modules sysctl hostname bootmisc syslog tapas-late-probe; do rc
 # and logread (tapas-diag.start) nothing
 rc-update del logbookd boot || true
 # Not msm-modem-uim-selection: the modem provisions the SIM by itself, and the
-# script's deactivate/activate of that session goes with the modem dropping
+# script deactivating/activating that session goes with the modem dropping
 # to shutting-down/offline (DeviceNotReady in ModemManager)
 for s in local sshd crond rmtfs tqftpserv; do rc-update add $s default; done
 # Autologin into Plasma Mobile with greetd (rootfs/etc/greetd/config.toml)
