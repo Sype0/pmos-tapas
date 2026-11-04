@@ -1,0 +1,161 @@
+simpledrm: sync updates to the scanout's line counter
+
+simpledrm copies every update straight into the buffer the display
+controller is scanning out; when the copy and the scanout cross, the
+picture tears horizontally (plain while scrolling). With an optional
+scanout-line-count-reg property, the physical address of the
+controller's current-line counter (INTF_LINE_COUNT of the DPU's INTF_1
+here), wait for the counter to wrap before copying, so the copy starts in
+the vertical blanking and stays ahead of the scanout. The counter is
+checked at probe (it must wrap at a steady 4-50 ms per frame), otherwise
+the sync stays off.
+
+--- a/drivers/gpu/drm/sysfb/simpledrm.c
++++ b/drivers/gpu/drm/sysfb/simpledrm.c
+@@ -2,6 +2,9 @@
+ 
+ #include <linux/aperture.h>
+ #include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/ktime.h>
+ #include <linux/minmax.h>
+ #include <linux/of_address.h>
+ #include <linux/of_clk.h>
+@@ -275,6 +278,11 @@
+ 	struct drm_crtc crtc;
+ 	struct drm_encoder encoder;
+ 	struct drm_connector connector;
++
++	/* scanout sync: the display controller's line counter, if any */
++	void __iomem *line_count;
++	u32 vtotal;
++	u32 line_ns;
+ };
+ 
+ /*
+@@ -598,8 +606,115 @@
+ 	DRM_SYSFB_PLANE_FORMAT_MODIFIERS,
+ };
+ 
++/*
++ * Scanout sync. There is no page flip here: every update is copied into the
++ * buffer the display controller is scanning out, and a copy that runs while
++ * the scanout passes over it shows as a horizontal tear (scrolling makes it
++ * plain). With "scanout-line-count-reg", the address of the controller's
++ * current-line counter (on Qualcomm DPUs the INTF's INTF_LINE_COUNT), wait
++ * for the counter to wrap, i.e. for a new frame, before copying: the copy
++ * then starts in the vertical blanking and runs ahead of the scanout.
++ *
++ * The counter is checked at probe: it has to wrap at a steady frame rate,
++ * or the sync stays off and updates are copied at once, as before.
++ */
++static void simpledrm_device_init_scanout_sync(struct simpledrm_device *sdev,
++					       struct device_node *of_node)
++{
++	struct drm_device *dev = &sdev->sysfb.dev;
++	ktime_t start, first = 0, last = 0;
++	u32 addr, line, prev, top = 0;
++	unsigned int wraps = 0;
++	void __iomem *reg;
++	u64 frame_ns;
++
++	if (of_property_read_u32(of_node, "scanout-line-count-reg", &addr))
++		return;
++	reg = devm_ioremap(dev->dev, addr, sizeof(u32));
++	if (!reg) {
++		drm_warn(dev, "scanout sync: cannot map 0x%08x\n", addr);
++		return;
++	}
++
++	/* 50 ms: several frames at any sane rate */
++	start = ktime_get();
++	prev = readl(reg);
++	while (ktime_us_delta(ktime_get(), start) < 50000) {
++		line = readl(reg);
++		if (line < prev) {
++			last = ktime_get();
++			if (!wraps++)
++				first = last;
++		}
++		top = max(top, line);
++		prev = line;
++		cpu_relax();
++	}
++	if (wraps < 3 || top < 100 || top > 10000) {
++		drm_warn(dev, "scanout sync off: line counter wrapped %u times, max %u\n",
++			 wraps, top);
++		return;
++	}
++	frame_ns = div_u64(ktime_to_ns(ktime_sub(last, first)), wraps - 1);
++	if (frame_ns < 4000000 || frame_ns > 50000000) {
++		drm_warn(dev, "scanout sync off: %llu ns per frame\n", frame_ns);
++		return;
++	}
++	sdev->vtotal = top + 1;
++	sdev->line_ns = div_u64(frame_ns, sdev->vtotal);
++	sdev->line_count = reg;
++	drm_info(dev, "scanout sync: %u lines, %llu us per frame\n",
++		 sdev->vtotal, div_u64(frame_ns, 1000));
++}
++
++static void simpledrm_wait_for_new_frame(struct simpledrm_device *sdev)
++{
++	u32 line, prev;
++	u64 ns;
++	ktime_t end;
++
++	if (!sdev->line_count)
++		return;
++
++	/* sleep through most of what is left of this frame */
++	line = readl(sdev->line_count);
++	if (line < sdev->vtotal) {
++		ns = (u64)(sdev->vtotal - line) * sdev->line_ns;
++		if (ns > 400000)
++			usleep_range(div_u64(ns - 400000, 1000),
++				     div_u64(ns - 250000, 1000));
++	}
++
++	/* then catch the wrap; give up after a frame and a bit */
++	end = ktime_add_ns(ktime_get(), (u64)sdev->vtotal * sdev->line_ns + 500000);
++	prev = readl(sdev->line_count);
++	while (ktime_before(ktime_get(), end)) {
++		line = readl(sdev->line_count);
++		if (line < prev)
++			return;
++		prev = line;
++		cpu_relax();
++	}
++}
++
++static void simpledrm_primary_plane_helper_atomic_update(struct drm_plane *plane,
++							 struct drm_atomic_commit *state)
++{
++	struct simpledrm_device *sdev =
++		container_of(plane, struct simpledrm_device, primary_plane);
++
++	simpledrm_wait_for_new_frame(sdev);
++	drm_sysfb_plane_helper_atomic_update(plane, state);
++}
++
+ static const struct drm_plane_helper_funcs simpledrm_primary_plane_helper_funcs = {
+-	DRM_SYSFB_PLANE_HELPER_FUNCS,
++	/* DRM_SYSFB_PLANE_HELPER_FUNCS, with the update waiting for the scanout */
++	.begin_fb_access = drm_sysfb_plane_helper_begin_fb_access,
++	.end_fb_access = drm_gem_end_shadow_fb_access,
++	.atomic_check = drm_sysfb_plane_helper_atomic_check,
++	.atomic_update = simpledrm_primary_plane_helper_atomic_update,
++	.atomic_disable = drm_sysfb_plane_helper_atomic_disable,
++	.get_scanout_buffer = drm_sysfb_plane_helper_get_scanout_buffer,
+ };
+ 
+ static const struct drm_plane_funcs simpledrm_primary_plane_funcs = {
+@@ -710,6 +825,7 @@
+ 		if (IS_ERR(mem))
+ 			return ERR_CAST(mem);
+ 		refresh = simplefb_get_refresh_rate_of(dev, of_node);
++		simpledrm_device_init_scanout_sync(sdev, of_node);
+ 		panel_node = of_parse_phandle(of_node, "panel", 0);
+ 		if (panel_node) {
+ 			/*

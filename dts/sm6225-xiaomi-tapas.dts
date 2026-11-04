@@ -61,6 +61,13 @@
 			 * (patches/0001-simpledrm-refresh-rate.patch)
 			 */
 			refresh-rate = <120>;
+			/*
+			 * INTF_LINE_COUNT of the DPU's INTF_1 (0x5e01000 + 0x6a800
+			 * + 0xb0): simpledrm waits for it to wrap before copying an
+			 * update, so scrolling does not tear
+			 * (patches/0005-simpledrm-scanout-sync.patch)
+			 */
+			scanout-line-count-reg = <0x05e6b8b0>;
 			panel = <&framebuffer_panel>;
 		};
 	};

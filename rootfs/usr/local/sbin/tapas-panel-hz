@@ -15,7 +15,8 @@ INTF1 = 0x05e01000 + 0x6a800  # DPU (mdp) base + INTF_1, dpu_6_3_sm6115.h
 REGS = [('timing_engine_en', 0x000), ('hsync_ctl', 0x008),
         ('vsync_period_f0', 0x010), ('vsync_pulse_width_f0', 0x018),
         ('display_v_start_f0', 0x01c), ('display_v_end_f0', 0x024),
-        ('display_hctl', 0x03c), ('frame_count', 0x0ac)]
+        ('display_hctl', 0x03c), ('frame_count', 0x0ac),
+        ('line_count', 0x0b0)]
 
 page = INTF1 & ~(mmap.PAGESIZE - 1)
 fd = os.open('/dev/mem', os.O_RDWR | os.O_SYNC)
