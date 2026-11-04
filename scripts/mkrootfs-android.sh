@@ -78,6 +78,13 @@ $C /usr/bin/flatpak remote-add --if-not-exists flathub \
 # Plasma Mobile's camera app, and the tools tapas-camera.start logs with
 $C /sbin/apk add libcamera-ipa libcamera-tools pipewire-spa-libcamera \
 	plasma-camera v4l-utils i2c-tools
+# Phosh, the session greetd logs into (Plasma Mobile stays installed), and
+# its apps: calls, SMS, contacts, clocks, weather, calculator, images,
+# camera (Snapshot), files, terminal, text editor, PDF, calendar
+$C /sbin/apk add postmarketos-ui-phosh phosh-mobile-settings squeekboard \
+	calls chatty snapshot gnome-contacts gnome-clocks gnome-weather \
+	gnome-calculator loupe nautilus gnome-console gnome-text-editor papers \
+	karlender
 # PulseAudio without timer-based scheduling: the q6apm PCM pointer only
 # moves a period at a time, which the timer mode reads as "woken up with
 # nothing to write"
@@ -170,11 +177,13 @@ rc-update del logbookd boot || true
 # script deactivating/activating that session goes with the modem dropping
 # to shutting-down/offline (DeviceNotReady in ModemManager)
 for s in local sshd crond rmtfs tqftpserv; do rc-update add $s default; done
-# Autologin into Plasma Mobile with greetd (rootfs/etc/greetd/config.toml)
-# instead of the tinydm that postmarketos-ui-plasma-mobile-openrc enables
+# Autologin into Phosh with greetd (rootfs/etc/greetd/config.toml)
+# instead of tinydm or phrog, which the UI packages set up
 sed -i "s|^#\?cfgfile=.*|cfgfile=\"/etc/greetd/config.toml\"|" /etc/conf.d/greetd
 rc-update del tinydm default || true
+rm -f /etc/conf.d/greetd.apk-new
 rc-update add greetd default
+dconf update
 for s in mount-ro killprocs savecache; do rc-update add $s shutdown; done
 # No swap file inside a loop image on FAT
 rc-update del swapfile default || true
