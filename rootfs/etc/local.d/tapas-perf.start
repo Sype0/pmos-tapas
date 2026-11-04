@@ -32,6 +32,13 @@ snap() {
 	echo "stat: $(cat /sys/block/mmcblk0/stat)"
 	echo "== GPU"
 	ls -l /sys/class/drm/ | grep -o 'card[0-9]* -> .*'
+	# whether the Adreno clocks up under load or sits at its lowest step
+	for d in /sys/class/devfreq/*.gpu; do
+		[ -d "$d" ] || continue
+		echo "$d: gov $(cat $d/governor) cur $(cat $d/cur_freq) min $(cat $d/min_freq) max $(cat $d/max_freq)"
+		echo "  available: $(cat $d/available_frequencies)"
+		cat $d/trans_stat 2>/dev/null | tail -n 3
+	done
 	k=$(pidof kwin_wayland | cut -d' ' -f1)
 	if [ -n "$k" ]; then
 		bus=$(tr '\0' '\n' </proc/$k/environ | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')

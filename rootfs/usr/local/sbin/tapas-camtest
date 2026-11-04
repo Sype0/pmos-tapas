@@ -4,18 +4,42 @@
 # but nothing says whether frames arrive, so this captures 5 small frames
 # from each camera (or only camera N: `tapas-camtest N`) and logs the
 # CAMSS interrupt counts (CSIPHY/CSID/VFE) before and after, plus the kernel
-# log of each run. Into /var/log/tapas-camtest.log (and the terminal).
+# log of each run. Into /var/log/tapas-camtest.log (and the terminal), the
+# live kernel log into /var/log/tapas-camtest-kmsg.log.
 
 [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
 irqs() { grep -iE 'csid|csiphy|vfe|tfe|camss|cci' /proc/interrupts; }
+# The 2026-11-04 run died right after it started, with plasma-camera still
+# streaming: refuse to start while a camera app runs
+for a in plasma-camera snapshot megapixels; do
+	if pidof $a >/dev/null; then
+		echo "close $a first (pidof $a: $(pidof $a))"
+		exit 1
+	fi
+done
+
+# The kernel log as it happens, and a sync every 2 s, so a freeze in the
+# middle of a capture still leaves its trace on the SD card
+dmesg -w >/var/log/tapas-camtest-kmsg.log 2>&1 &
+D=$!
+(while sleep 2; do sync; done) &
+S=$!
+trap 'kill $D $S 2>/dev/null' EXIT
 
 {
 	echo "== $(date) uptime $(cut -d' ' -f1 /proc/uptime)"
-	cam -l 2>/dev/null | grep '^[0-9]*:'
-	n=$(cam -l 2>/dev/null | grep -c '^[0-9]*:')
+	# sync after every step: the system died during the last run and the
+	# unsynced log was lost
+	sync
+	l=$(timeout 15 cam -l 2>/dev/null)
+	echo "-- cam -l exit $?"
+	echo "$l" | grep '^[0-9]*:'
+	n=$(echo "$l" | grep -c '^[0-9]*:')
+	sync
 	for c in ${1:-$(seq 1 $n)}; do
 		echo "== capture camera $c"
 		irqs
+		sync
 		k=$(dmesg | tail -n 1 | cut -d']' -f1)
 		LIBCAMERA_LOG_LEVELS='*:WARN,SimplePipeline:DEBUG,SoftwareIsp:INFO' \
 			timeout 25 cam -c $c -C5 -s role=viewfinder,width=1280,height=960
@@ -23,6 +47,7 @@ irqs() { grep -iE 'csid|csiphy|vfe|tfe|camss|cci' /proc/interrupts; }
 		irqs
 		echo "-- kernel since"
 		dmesg | awk -v k="$k]" 'p; index($0, k) == 1 { p = 1 }'
+		sync
 	done
 } 2>&1 | tee -a /var/log/tapas-camtest.log
 sync

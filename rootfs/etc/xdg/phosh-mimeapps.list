@@ -1,3 +1,0 @@
-[Default Applications]
-x-scheme-handler/sms=sm.puri.Chatty.desktop
-x-scheme-handler/tel=org.gnome.Calls.desktop

@@ -1,0 +1,12 @@
+#!/bin/sh
+# No blur anywhere in Plasma Mobile. KWin's blur and background contrast
+# are off in /etc/tapas/xdg/kwinrc and the home screens' wallpaper blur in
+# tapas-plasma; what is left is the lock screen's full-screen wallpaper blur
+# (MultiEffect, radius 50) behind the keypad. It is plain QML in the shell
+# package, so turn its loader off here, at every boot: a plasma-mobile
+# upgrade puts the file back.
+F=/usr/share/plasma/shells/org.kde.plasma.mobileshell/contents/lockscreen/LockScreen.qml
+[ -f "$F" ] || exit 0
+grep -q 'onTriggered: wallpaperLoader.active = true' "$F" &&
+	sed -i 's/onTriggered: wallpaperLoader.active = true/onTriggered: wallpaperLoader.active = false \/\/ tapas: no blur/' "$F"
+exit 0

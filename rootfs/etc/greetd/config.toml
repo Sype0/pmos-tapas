@@ -1,14 +1,13 @@
-# tapas: no greeter, log `user` straight into Phosh. If the session ends,
-# greetd starts it again as its "greeter". Plasma Mobile is still
-# installed: /usr/local/bin/tapas-plasma here goes back to it.
+# tapas: no greeter, log `user` straight into Plasma Mobile. If the session
+# ends, greetd starts it again as its "greeter".
 
 [terminal]
 vt = 7
 
 [initial_session]
-command = "/usr/local/bin/tapas-phosh"
+command = "/usr/local/bin/tapas-plasma"
 user = "user"
 
 [default_session]
-command = "/usr/local/bin/tapas-phosh"
+command = "/usr/local/bin/tapas-plasma"
 user = "user"

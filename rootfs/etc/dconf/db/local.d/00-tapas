@@ -1,7 +1,0 @@
-# tapas: Turkish keyboard (squeekboard and hardware), Istanbul clock.
-# Compiled into /etc/dconf/db/local by `dconf update`.
-[org/gnome/desktop/input-sources]
-sources=[('xkb', 'tr')]
-
-[org/gnome/desktop/interface]
-clock-format='24h'
