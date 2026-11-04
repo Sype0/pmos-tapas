@@ -1,0 +1,50 @@
+media: s5kjn1: drop the 8160x6144 mode, fix the crop height
+
+On tapas every pmOS boot that streamed the back camera died within
+seconds of s5kjn1 enable_streams in the full 50 MP mode (boots 02, 05 and
+the 2026-11-04 20:57 one: the kernel and system logs stop right there).
+libcamera's simple pipeline offers the largest size by default, so
+plasma-camera always asked for 8152x6144 ABGR through the software ISP:
+62 MB raw plus 200 MB RGB per frame, debayered on the CPU. The 8 MP
+ov08d10 streamed in the same boot without trouble.
+
+Keep only the 4080x3072 (2x2 binned, 30 fps) mode until the full readout
+is usable. The crop rectangle also returned the width as its height
+(libcamera saw an 8160x8160 pixel array).
+
+--- a/drivers/media/i2c/s5kjn1.c	2026-11-05 01:16:57.047813430 +0300
++++ b/drivers/media/i2c/s5kjn1.c	2026-11-05 01:16:57.175813430 +0300
+@@ -431,7 +431,7 @@
+ 	{ CCI_REG16(0x0816), 0x1c00 },
+ };
+ 
+-static const struct cci_reg_sequence s5kjn1_8160x6144_10fps_mode[] = {
++static const struct cci_reg_sequence s5kjn1_8160x6144_10fps_mode[] __maybe_unused = {
+ 	{ CCI_REG16(0x6028), 0x2400 },
+ 	{ CCI_REG16(0x602a), 0x1a28 },
+ 	{ CCI_REG16(0x6f12), 0x4c00 },
+@@ -727,6 +727,7 @@
+ 			.num_regs = ARRAY_SIZE(s5kjn1_4080x3072_30fps_mode),
+ 		},
+ 	},
++#if 0	/* tapas: full 50 MP readout freezes the phone, see the patch */
+ 	{
+ 		.width = 8160,
+ 		.height = 6144,
+@@ -739,6 +740,7 @@
+ 			.num_regs = ARRAY_SIZE(s5kjn1_8160x6144_10fps_mode),
+ 		},
+ 	},
++#endif
+ };
+ 
+ static int s5kjn1_set_ctrl(struct v4l2_ctrl *ctrl)
+@@ -1085,7 +1087,7 @@
+ 		sel->r.left = 0;
+ 		sel->r.top = 0;
+ 		sel->r.width = s5kjn1->mode->width;
+-		sel->r.height = s5kjn1->mode->width;
++		sel->r.height = s5kjn1->mode->height;
+ 		return 0;
+ 	default:
+ 		return -EINVAL;
