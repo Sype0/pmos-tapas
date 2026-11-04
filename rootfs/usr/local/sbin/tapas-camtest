@@ -1,0 +1,28 @@
+#!/bin/sh
+# Camera capture test, run by hand as root: `sudo tapas-camtest` (close
+# the camera app first). Streaming starts (the sensor's enable_streams)
+# but nothing says whether frames arrive, so this captures 5 small frames
+# from each camera (or only camera N: `tapas-camtest N`) and logs the
+# CAMSS interrupt counts (CSIPHY/CSID/VFE) before and after, plus the kernel
+# log of each run. Into /var/log/tapas-camtest.log (and the terminal).
+
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+irqs() { grep -iE 'csid|csiphy|vfe|tfe|camss|cci' /proc/interrupts; }
+
+{
+	echo "== $(date) uptime $(cut -d' ' -f1 /proc/uptime)"
+	cam -l 2>/dev/null | grep '^[0-9]*:'
+	n=$(cam -l 2>/dev/null | grep -c '^[0-9]*:')
+	for c in ${1:-$(seq 1 $n)}; do
+		echo "== capture camera $c"
+		irqs
+		k=$(dmesg | tail -n 1 | cut -d']' -f1)
+		LIBCAMERA_LOG_LEVELS='*:WARN,SimplePipeline:DEBUG,SoftwareIsp:INFO' \
+			timeout 25 cam -c $c -C5 -s role=viewfinder,width=1280,height=960
+		echo "-- exit $?"
+		irqs
+		echo "-- kernel since"
+		dmesg | awk -v k="$k]" 'p; index($0, k) == 1 { p = 1 }'
+	done
+} 2>&1 | tee -a /var/log/tapas-camtest.log
+sync
